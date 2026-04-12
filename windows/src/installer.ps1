@@ -530,12 +530,12 @@ function Install-VSCodeExtensions {
             }
             else {
                 Write-StepError "Extension '$ext' install returned exit code $exitCode"
-                Write-ColoredOutput "  Install manually: Open VS Code > Ctrl+Shift+X > Search '$ext'" "Yellow"
+                Write-ColoredOutput "  Install manually in VS Code: Extensions sidebar, search '$ext'" "Yellow"
             }
         }
         catch {
             Write-StepError "Failed to install extension '$ext': $($_.Exception.Message)"
-            Write-ColoredOutput "  Install manually: Open VS Code > Ctrl+Shift+X > Search '$ext'" "Yellow"
+            Write-ColoredOutput "  Install manually in VS Code: Extensions sidebar, search '$ext'" "Yellow"
         }
     }
 }
@@ -656,36 +656,42 @@ try {
     Write-ColoredOutput "Verification:" "Cyan"
 
     # Check each tool
-    $tools = @(
-        @{ Name = "VS Code"; Cmd = "code --version 2>`$null | Select-Object -First 1" },
-        @{ Name = "Git"; Cmd = "git --version 2>`$null" },
-        @{ Name = "Node.js"; Cmd = "node -v 2>`$null" },
-        @{ Name = "npm"; Cmd = "npm -v 2>`$null" },
-        @{ Name = "Claude Code"; Cmd = "claude --version 2>`$null" }
+    $toolChecks = @(
+        @{ Name = "VS Code"; Cmd = "code"; Args = @("--version") },
+        @{ Name = "Git"; Cmd = "git"; Args = @("--version") },
+        @{ Name = "Node.js"; Cmd = "node"; Args = @("-v") },
+        @{ Name = "npm"; Cmd = "npm"; Args = @("-v") },
+        @{ Name = "Claude Code"; Cmd = "claude"; Args = @("--version") }
     )
 
-    foreach ($tool in $tools) {
+    foreach ($tool in $toolChecks) {
+        $padding = ' ' * (16 - $tool.Name.Length)
         try {
-            $version = Invoke-Expression $tool.Cmd
-            if ($version) {
-                $padding = ' ' * (16 - $tool.Name.Length)
-                Write-Host "  [OK] $($tool.Name)$padding$version" -ForegroundColor Green
+            $cmd = Get-Command $tool.Cmd -ErrorAction SilentlyContinue
+            if ($cmd) {
+                $version = (& $tool.Cmd $tool.Args 2>$null | Select-Object -First 1)
+                if ($version) {
+                    Write-Host "  [OK] $($tool.Name)$padding$version" -ForegroundColor Green
+                }
+                else {
+                    Write-Host "  [OK] $($tool.Name)${padding}installed" -ForegroundColor Green
+                }
             }
             else {
-                Write-Host "  [--] $($tool.Name)" -ForegroundColor Yellow
+                Write-Host "  [--] $($tool.Name)${padding}not in PATH" -ForegroundColor Yellow
             }
         }
         catch {
-            Write-Host "  [--] $($tool.Name)" -ForegroundColor Yellow
+            Write-Host "  [--] $($tool.Name)${padding}not in PATH" -ForegroundColor Yellow
         }
     }
 
     Write-Host ""
     Write-ColoredOutput "Next steps:" "White"
-    Write-ColoredOutput "  1. Open VS Code (type 'code' in terminal or find it in Start menu)" "White"
-    Write-ColoredOutput "  2. Open a terminal in VS Code (Ctrl + ``)" "White"
-    Write-ColoredOutput "  3. Type 'claude' to start Claude Code" "White"
-    Write-ColoredOutput "  4. You'll be prompted to authenticate on first run" "White"
+    Write-Host "  1. Open VS Code (type 'code' in terminal or find it in Start menu)" -ForegroundColor White
+    Write-Host "  2. Open a terminal in VS Code (Ctrl + backtick)" -ForegroundColor White
+    Write-Host "  3. Type 'claude' to start Claude Code" -ForegroundColor White
+    Write-Host "  4. You will be prompted to authenticate on first run" -ForegroundColor White
     Write-Host ""
     Write-ColoredOutput "Note: You may need to restart your terminal for all PATH changes to take effect." "Yellow"
     Write-Host ""
