@@ -2,16 +2,6 @@
 
 One-click installer scripts that set up a complete Claude Code development environment. Designed for students — run one command, get everything installed with zero manual steps.
 
-## What Gets Installed
-
-| Tool | Description |
-|------|-------------|
-| **VS Code** | Latest version with auto-save, formatting, and sensible defaults |
-| **Claude Code Extension** | Pre-installed in VS Code |
-| **Git** | Configured with best practices (default branch: main, VS Code as editor) |
-| **Node.js** | Latest LTS version via nvm (with npm updated to latest) |
-| **Claude Code** | Latest version via npm |
-
 ## Quick Start
 
 ### Windows - One-Click install (Recommended)
@@ -31,6 +21,16 @@ curl -L "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-inst
 ```bash
 curl -fsSL https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/mac/install.sh | bash
 ```
+
+## What Gets Installed
+
+| Tool | Description |
+|------|-------------|
+| **VS Code** | Latest version with auto-save, formatting, and sensible defaults |
+| **Claude Code Extension** | Pre-installed in VS Code |
+| **Git** | Configured with best practices (default branch: main, VS Code as editor) |
+| **Node.js** | Latest LTS version via nvm (with npm updated to latest) |
+| **Claude Code** | Latest version via npm |
 
 ## After Installation
 
