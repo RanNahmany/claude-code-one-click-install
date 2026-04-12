@@ -14,32 +14,22 @@ One-click installer scripts that set up a complete Claude Code development envir
 
 ## Quick Start
 
-### Windows
+### Windows - One-Click install (Recommended)
 
-**Option 1: One-line install** (open Command Prompt or PowerShell)
-```
+**Step 1: Open PowerShell as administrator (right-click on PowerShell and select "Run as administrator")**
+
+**Step 2: Copy&Paste the following command into PowerShell and press Enter**
+```bash
 curl -L "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/windows/install.bat" -o install.bat && install.bat
 ```
 
-**Option 2: Clone and run**
-```
-git clone https://github.com/RanNahmany/claude-code-one-click-install.git
-cd claude-code-one-click-install\windows
-install.bat
-```
+### macOS - One-Click install (Recommended)
 
-### macOS
+**Step 1: Open Terminal**
 
-**Option 1: One-line install** (open Terminal)
+**Step 2: Copy&Paste the following command into Terminal and press Enter**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/mac/install.sh | bash
-```
-
-**Option 2: Clone and run**
-```bash
-git clone https://github.com/RanNahmany/claude-code-one-click-install.git
-cd claude-code-one-click-install/mac
-bash install.sh
 ```
 
 ## After Installation
