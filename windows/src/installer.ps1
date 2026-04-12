@@ -131,16 +131,34 @@ function Test-NodeVersion {
     }
 }
 
-function Find-VSCodePath {
-    # Check common VS Code installation paths
+function Find-VSCodeCmd {
+    # Find the 'code' CLI command (.cmd wrapper, not .exe)
+    # Must check multiple locations because admin elevation may change LOCALAPPDATA
     $paths = @(
+        # Current user (works when not elevated or same-user elevation)
         "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd",
-        "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+        # System-wide install
         "C:\Program Files\Microsoft VS Code\bin\code.cmd",
-        "C:\Program Files\Microsoft VS Code\Code.exe"
+        "C:\Program Files (x86)\Microsoft VS Code\bin\code.cmd"
     )
-    foreach ($p in $paths) {
+
+    # Also check the original user's profile (in case running elevated as different user)
+    $userProfile = $env:USERPROFILE
+    if ($userProfile) {
+        $paths += "$userProfile\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd"
+    }
+
+    # Check all user profiles as last resort
+    $usersDir = "C:\Users"
+    if (Test-Path $usersDir) {
+        Get-ChildItem $usersDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $paths += "$($_.FullName)\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd"
+        }
+    }
+
+    foreach ($p in ($paths | Select-Object -Unique)) {
         if (Test-Path $p) {
+            Write-DebugOutput "Found VS Code CLI at: $p"
             return $p
         }
     }
@@ -156,7 +174,7 @@ function Install-VSCode {
 
     # Check if already installed
     $codeCmd = Get-Command code -ErrorAction SilentlyContinue
-    if ($codeCmd -or (Find-VSCodePath)) {
+    if ($codeCmd -or (Find-VSCodeCmd)) {
         Write-Skip "VS Code is already installed"
         return
     }
@@ -481,30 +499,43 @@ function Install-ClaudeCode {
 function Install-VSCodeExtensions {
     Write-StepHeader 7 "Installing VS Code extensions..."
 
-    # Find the code command
+    # Find the code CLI command
     $codeCmd = Get-Command code -ErrorAction SilentlyContinue
     $codePath = if ($codeCmd) {
-        "code"
+        $codeCmd.Source
     }
     else {
-        $found = Find-VSCodePath
-        if ($found -and $found.EndsWith(".cmd")) { $found } else { $null }
+        Find-VSCodeCmd
     }
 
     if (-not $codePath) {
-        Write-Skip "VS Code not found in PATH, skipping extension installation"
+        Write-StepError "VS Code 'code' command not found — cannot install extensions"
+        Write-ColoredOutput "  Extensions can be installed manually in VS Code: Ctrl+Shift+X" "Yellow"
         return
     }
+
+    Write-DebugOutput "Using VS Code CLI at: $codePath"
 
     $extensions = $script:Config.vscode.extensions
     foreach ($ext in $extensions) {
         Write-DebugOutput "Installing extension: $ext"
         try {
-            & $codePath --install-extension $ext --force 2>&1 | Out-Null
-            Write-Success "Extension '$ext' installed"
+            $output = & $codePath --install-extension $ext --force 2>&1
+            $exitCode = $LASTEXITCODE
+            Write-DebugOutput "Extension install output: $output"
+            Write-DebugOutput "Extension install exit code: $exitCode"
+
+            if ($exitCode -eq 0) {
+                Write-Success "Extension '$ext' installed"
+            }
+            else {
+                Write-StepError "Extension '$ext' install returned exit code $exitCode"
+                Write-ColoredOutput "  Install manually: Open VS Code > Ctrl+Shift+X > Search '$ext'" "Yellow"
+            }
         }
         catch {
             Write-StepError "Failed to install extension '$ext': $($_.Exception.Message)"
+            Write-ColoredOutput "  Install manually: Open VS Code > Ctrl+Shift+X > Search '$ext'" "Yellow"
         }
     }
 }
@@ -512,7 +543,18 @@ function Install-VSCodeExtensions {
 function Set-VSCodeSettings {
     Write-StepHeader 8 "Configuring VS Code settings..."
 
+    # Find the correct user's AppData (may differ when running elevated)
     $settingsDir = "$env:APPDATA\Code\User"
+
+    # If the Code\User dir doesn't exist under current APPDATA, check the USERPROFILE path
+    if (-not (Test-Path "$env:APPDATA\Code") -and $env:USERPROFILE) {
+        $altSettingsDir = "$env:USERPROFILE\AppData\Roaming\Code\User"
+        if (Test-Path "$env:USERPROFILE\AppData\Roaming\Code") {
+            $settingsDir = $altSettingsDir
+            Write-DebugOutput "Using alternate settings path: $settingsDir"
+        }
+    }
+
     $settingsFile = "$settingsDir\settings.json"
 
     # Ensure directory exists

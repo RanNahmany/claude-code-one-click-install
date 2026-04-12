@@ -127,7 +127,7 @@ function Uninstall-VSCodeExtensions {
     }
 
     try {
-        & $codeExe --uninstall-extension anthropics.claude-code --force 2>&1 | Out-Null
+        & $codeExe --uninstall-extension anthropic.claude-code --force 2>&1 | Out-Null
         Write-Success "Claude Code extension removed"
     }
     catch {

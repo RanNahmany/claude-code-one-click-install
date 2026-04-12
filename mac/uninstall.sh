@@ -92,7 +92,7 @@ uninstall_vscode_extensions() {
         local code_cmd="code"
     fi
 
-    "$code_cmd" --uninstall-extension anthropics.claude-code --force &>/dev/null && \
+    "$code_cmd" --uninstall-extension anthropic.claude-code --force &>/dev/null && \
         print_success "Claude Code extension removed" || \
         print_debug "Extension removal returned non-zero (may already be removed)"
 }

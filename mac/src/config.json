@@ -9,7 +9,7 @@
   },
   "vscode": {
     "extensions": [
-      "anthropics.claude-code"
+      "anthropic.claude-code"
     ],
     "settings": {
       "files.autoSave": "afterDelay",
