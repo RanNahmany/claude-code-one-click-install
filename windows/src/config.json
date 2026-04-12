@@ -1,0 +1,30 @@
+{
+  "_comment": "Claude Code Windows Installer Configuration",
+  "_description": "This file controls version numbers and settings for the installer. Update versions here to change what gets installed.",
+  
+  "dependencies": {
+    "nodejs": {
+      "version": "20.18.0",
+      "minimumVersion": "20.11.0",
+      "_comment": "Node.js will be installed via nvm-windows for better version management"
+    },
+    "git": {
+      "version": "2.47.1",
+      "minimumVersion": "2.0.0",
+      "_comment": "Git for Windows will be downloaded from GitHub releases"
+    }
+  },
+  
+  "installer": {
+    "contextMenuText": "Open with Claude Code",
+    "contextMenuIcon": "%APPDATA%\\ClaudeCode\\claude-color.ico",
+    "iconSourceFile": "claude-color.ico",
+    "_comment": "Windows Explorer context menu configuration. Icon will be copied to AppData during installation"
+  },
+  
+  "urls": {
+    "nvmWindows": "https://github.com/coreybutler/nvm-windows/releases/latest/download/nvm-setup.exe",
+    "gitBase": "https://github.com/git-for-windows/git/releases/latest/download/Git-{version}-{arch}.exe",
+    "_comment": "URL templates. {version} and {arch} will be replaced with actual values during installation"
+  }
+}
