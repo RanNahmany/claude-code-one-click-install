@@ -70,7 +70,7 @@ Edit `src/config.json` to customize:
 
 To remove everything that was installed:
 ```bash
-bash uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/mac/uninstall.sh | bash
 ```
 
 This will uninstall VS Code, Git (Homebrew version), Node.js (nvm), Homebrew, Claude Code, and clean up all settings/config files. You'll be asked to confirm before proceeding.

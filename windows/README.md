@@ -59,9 +59,9 @@ Edit `src/config.json` to customize:
 
 ## Uninstall
 
-To remove everything that was installed:
-```
-uninstall.bat
+To remove everything that was installed (open PowerShell as Administrator):
+```powershell
+irm "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/windows/uninstall.bat" -OutFile uninstall.bat; .\uninstall.bat
 ```
 
 This will uninstall VS Code, Git, Node.js (nvm-windows), Claude Code, and clean up all settings/config files. You'll be asked to confirm before proceeding.

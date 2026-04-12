@@ -78,15 +78,13 @@ claude --version
 Need to roll back? Uninstall scripts remove everything that was installed.
 
 ### Windows
-```
-cd claude-code-one-click-install\windows
-uninstall.bat
+```powershell
+irm "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/windows/uninstall.bat" -OutFile uninstall.bat; .\uninstall.bat
 ```
 
 ### macOS
 ```bash
-cd claude-code-one-click-install/mac
-bash uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/mac/uninstall.sh | bash
 ```
 
 > **Note:** The macOS uninstaller intentionally keeps Xcode Command Line Tools installed.
