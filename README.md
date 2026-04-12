@@ -73,6 +73,24 @@ claude --version
 - If Homebrew asks for your password, enter your Mac login password
 - Apple Silicon (M1/M2/M3) and Intel Macs are both supported
 
+## Uninstall
+
+Need to roll back? Uninstall scripts remove everything that was installed.
+
+### Windows
+```
+cd claude-code-one-click-install\windows
+uninstall.bat
+```
+
+### macOS
+```bash
+cd claude-code-one-click-install/mac
+bash uninstall.sh
+```
+
+> **Note:** The macOS uninstaller intentionally keeps Xcode Command Line Tools installed.
+
 ## Platform Details
 
 - [Windows README](windows/README.md)

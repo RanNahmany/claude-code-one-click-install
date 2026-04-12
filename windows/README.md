@@ -57,15 +57,26 @@ Edit `src/config.json` to customize:
 - Each step checks if the tool is already installed and skips if so
 - No interactive prompts — everything is automatic
 
+## Uninstall
+
+To remove everything that was installed:
+```
+uninstall.bat
+```
+
+This will uninstall VS Code, Git, Node.js (nvm-windows), Claude Code, and clean up all settings/config files. You'll be asked to confirm before proceeding.
+
 ## File Structure
 
 ```
 windows/
-├── install.bat          # Entry point launcher
+├── install.bat            # Entry point launcher
+├── uninstall.bat          # Uninstaller launcher
 ├── src/
-│   ├── installer.ps1    # Main PowerShell installer
-│   └── config.json      # Configuration
-├── README.md            # This file
-├── CLAUDE.md            # Development documentation
-└── LICENSE              # MIT License
+│   ├── installer.ps1      # Main PowerShell installer
+│   ├── uninstaller.ps1    # Main PowerShell uninstaller
+│   └── config.json        # Configuration
+├── README.md              # This file
+├── CLAUDE.md              # Development documentation
+└── LICENSE                # MIT License
 ```

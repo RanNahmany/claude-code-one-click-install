@@ -66,6 +66,17 @@ Edit `src/config.json` to customize:
 - Each step checks if the tool is already installed and skips if so
 - No interactive prompts — everything is automatic
 
+## Uninstall
+
+To remove everything that was installed:
+```bash
+bash uninstall.sh
+```
+
+This will uninstall VS Code, Git (Homebrew version), Node.js (nvm), Homebrew, Claude Code, and clean up all settings/config files. You'll be asked to confirm before proceeding.
+
+> **Note:** Xcode Command Line Tools are intentionally NOT uninstalled, as they are commonly needed by other tools.
+
 ## Notes
 
 - Homebrew installs to `/opt/homebrew` on Apple Silicon and `/usr/local` on Intel
