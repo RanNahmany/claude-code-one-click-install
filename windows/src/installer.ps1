@@ -1,32 +1,29 @@
 # Claude Code Windows Installer
-# This script installs Claude Code and its dependencies on Windows systems
+# Installs VS Code, Git, Node.js, and Claude Code with zero manual steps
 #
 # Usage:
-#   installer.ps1                    # Interactive installation with user prompts
+#   installer.ps1                    # Standard installation
 #   installer.ps1 -Debug             # Enable debug output for troubleshooting
 
 param(
     [switch]$Debug
 )
 
-# Load configuration from config.json
+# ============================================================
+# Utility Functions
+# ============================================================
+
 function Get-InstallerConfig {
     $configPath = Join-Path $PSScriptRoot "config.json"
     Write-DebugOutput "Looking for config file at: $configPath"
-    
+
     if (-not (Test-Path $configPath)) {
         throw "Configuration file not found: $configPath"
     }
-    Write-DebugOutput "Config file found, parsing JSON..."
 
     try {
         $configContent = Get-Content $configPath -Raw | ConvertFrom-Json
         Write-DebugOutput "Config loaded successfully"
-        if ($Debug) {
-            Write-DebugOutput "Node.js version: $($configContent.dependencies.nodejs.version)"
-            Write-DebugOutput "Git version: $($configContent.dependencies.git.version)"
-            Write-DebugOutput "Context menu icon: $($configContent.installer.contextMenuIcon)"
-        }
         return $configContent
     }
     catch {
@@ -34,35 +31,26 @@ function Get-InstallerConfig {
     }
 }
 
-# Function to check if running as administrator
 function Test-Administrator {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Function to restart script with admin privileges
 function Request-AdminPrivileges {
     param([string]$ScriptPath)
 
     Write-Host "Admin permissions are needed to install system tools. Please click 'Yes' on the prompt." -ForegroundColor Yellow
     Write-DebugOutput "Current script path: $ScriptPath"
-    Write-DebugOutput "Current working directory: $(Get-Location)"
-    Write-DebugOutput "Debug mode enabled: $Debug"
     Start-Sleep -Seconds 2
 
     try {
-        # Build arguments including debug parameter if enabled
         $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"")
         if ($Debug) {
             $arguments += "-Debug"
             Write-DebugOutput "Adding -Debug parameter to elevated process"
         }
-        
-        Write-DebugOutput "Starting elevated process with arguments: $($arguments -join ' ')"
-        
-        # Note: -NoExit removed because batch file handles window pause at end
-        
+
         Start-Process powershell -Verb RunAs -ArgumentList $arguments -WorkingDirectory (Get-Location)
     }
     catch {
@@ -74,7 +62,6 @@ function Request-AdminPrivileges {
     exit
 }
 
-# Function to write colored output
 function Write-ColoredOutput {
     param(
         [string]$Message,
@@ -83,9 +70,6 @@ function Write-ColoredOutput {
     Write-Host $Message -ForegroundColor $Color
 }
 
-# Function to write debug output when -Debug parameter is enabled
-# Only outputs messages when script is run with -Debug switch
-# Prefixes all messages with [DEBUG] for easy identification
 function Write-DebugOutput {
     param(
         [string]$Message,
@@ -96,38 +80,30 @@ function Write-DebugOutput {
     }
 }
 
-# Function to prompt user for yes/no confirmation
-function Get-UserConfirmation {
+function Write-StepHeader {
     param(
-        [string]$Message,
-        [string]$DefaultChoice = "N"
+        [int]$StepNumber,
+        [string]$Description
     )
-
-    $defaultText = if ($DefaultChoice.ToUpper() -eq "Y") {
-        "default: Yes"
-    } else {
-        "default: No"
-    }
-
-    $prompt = if ($DefaultChoice.ToUpper() -eq "Y") {
-        "$Message [Y/n] ($defaultText): "
-    } else {
-        "$Message [y/N] ($defaultText): "
-    }
-
-    do {
-        $response = Read-Host $prompt
-        if ([string]::IsNullOrWhiteSpace($response)) {
-            $response = $DefaultChoice
-            Write-Host "Using default: $($DefaultChoice.ToUpper())" -ForegroundColor Gray
-        }
-        $response = $response.Trim().ToUpper()
-    } while ($response -notin @("Y", "YES", "N", "NO"))
-
-    return $response -in @("Y", "YES")
+    Write-Host ""
+    Write-Host "[$StepNumber/11] $Description" -ForegroundColor Cyan
 }
 
-# Function to check Node.js version against minimum requirement
+function Write-Success {
+    param([string]$Message)
+    Write-Host "  [OK] $Message" -ForegroundColor Green
+}
+
+function Write-Skip {
+    param([string]$Message)
+    Write-Host "  [SKIP] $Message" -ForegroundColor Yellow
+}
+
+function Write-StepError {
+    param([string]$Message)
+    Write-Host "  [FAIL] $Message" -ForegroundColor Red
+}
+
 function Test-NodeVersion {
     param([string]$Version)
 
@@ -138,14 +114,12 @@ function Test-NodeVersion {
         $minor = [int]$versionParts[1]
         $patch = [int]$versionParts[2]
 
-        # Get minimum version from config
         $minVersion = $script:Config.dependencies.nodejs.minimumVersion
         $minParts = $minVersion.Split('.')
         $minMajor = [int]$minParts[0]
         $minMinor = [int]$minParts[1]
         $minPatch = [int]$minParts[2]
 
-        # Check if version meets minimum requirement
         if ($major -gt $minMajor) { return $true }
         if ($major -eq $minMajor -and $minor -gt $minMinor) { return $true }
         if ($major -eq $minMajor -and $minor -eq $minMinor -and $patch -ge $minPatch) { return $true }
@@ -157,94 +131,212 @@ function Test-NodeVersion {
     }
 }
 
-# Function to download and install Git
-function Install-Git {
-    Write-ColoredOutput "A required tool, Git, is missing. We will now install it for you." "Yellow"
-
-    try {
-        # Check for running Git processes
-        $gitProcesses = Get-Process | Where-Object { $_.ProcessName -like "*git*" -or $_.ProcessName -like "*bash*" }
-        if ($gitProcesses.Count -gt 0) {
-            Write-ColoredOutput "Warning: Git or Git Bash processes are currently running." "Yellow"
-            Write-ColoredOutput "This may interfere with the Git installation." "Yellow"
-            Write-ColoredOutput ""
-            Write-ColoredOutput "Running processes:" "Gray"
-            $gitProcesses | ForEach-Object { Write-ColoredOutput "  - $($_.ProcessName)" "Gray" }
-            Write-ColoredOutput ""
-
-            if (-not (Get-UserConfirmation "Continue with Git installation anyway?" "N")) {
-                Write-ColoredOutput "Git installation skipped. Please close Git processes and run the installer again." "Yellow"
-                return
-            }
+function Find-VSCodePath {
+    # Check common VS Code installation paths
+    $paths = @(
+        "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd",
+        "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+        "C:\Program Files\Microsoft VS Code\bin\code.cmd",
+        "C:\Program Files\Microsoft VS Code\Code.exe"
+    )
+    foreach ($p in $paths) {
+        if (Test-Path $p) {
+            return $p
         }
-
-        # Detect system architecture
-        $architecture = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
-        Write-ColoredOutput "Detected $architecture Windows system" "Gray"
-
-        # Build URL from config template
-        $gitConfig = $script:Config.dependencies.git
-        $gitUrl = $script:Config.urls.gitBase -replace '{version}', $gitConfig.version -replace '{arch}', $architecture
-        $gitInstaller = "$env:TEMP\git-installer.exe"
-
-        Write-ColoredOutput "Downloading Git v$($gitConfig.version) for $architecture..." "Cyan"
-        Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
-
-        Write-ColoredOutput "Installing Git..." "Cyan"
-        Write-ColoredOutput "Note: If installation fails, close all Git Bash windows and try again." "Gray"
-
-        $installProcess = Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART" -Wait -PassThru
-
-        if ($installProcess.ExitCode -ne 0) {
-            throw "Git installer failed with exit code $($installProcess.ExitCode). This often happens when Git processes are running."
-        }
-
-        # Add Git to PATH for current session
-        $gitPath = if ($architecture -eq "64-bit") {
-            "C:\Program Files\Git\bin"
-        } else {
-            "C:\Program Files (x86)\Git\bin"
-        }
-
-        if (Test-Path $gitPath) {
-            $env:Path += ";$gitPath"
-        }
-
-        Remove-Item $gitInstaller -Force
-        Write-ColoredOutput "Git v$($gitConfig.version) installed successfully!" "Green"
     }
-    catch {
-        Write-ColoredOutput "Git installation failed: $($_.Exception.Message)" "Red"
-        Write-ColoredOutput ""
-        Write-ColoredOutput "Common solutions:" "Yellow"
-        Write-ColoredOutput "- Close all Git Bash windows and terminals" "White"
-        Write-ColoredOutput "- Close any applications using Git (VS Code, etc.)" "White"
-        Write-ColoredOutput "- Restart your computer and try again" "White"
-        Write-ColoredOutput ""
+    return $null
+}
 
-        if (Get-UserConfirmation "Would you like to continue without reinstalling Git?" "N") {
-            Write-ColoredOutput "Continuing with existing Git installation..." "Yellow"
-        } else {
-            throw "Git installation required but failed."
+# ============================================================
+# Installation Functions
+# ============================================================
+
+function Install-VSCode {
+    Write-StepHeader 1 "Installing VS Code..."
+
+    # Check if already installed
+    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
+    if ($codeCmd -or (Find-VSCodePath)) {
+        Write-Skip "VS Code is already installed"
+        return
+    }
+
+    # Try winget first
+    $wingetAvailable = Get-Command winget -ErrorAction SilentlyContinue
+    $installed = $false
+
+    if ($wingetAvailable) {
+        Write-DebugOutput "Attempting VS Code installation via winget..."
+        try {
+            $result = winget install --id Microsoft.VisualStudioCode -e --source winget --accept-package-agreements --accept-source-agreements --silent 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+            }
+            Write-DebugOutput "winget exit code: $LASTEXITCODE"
         }
+        catch {
+            Write-DebugOutput "winget failed: $($_.Exception.Message)"
+        }
+    }
+
+    # Fallback to direct download
+    if (-not $installed) {
+        Write-DebugOutput "Downloading VS Code installer..."
+        $vscodeUrl = $script:Config.urls.vscodeWindows
+        $vscodeInstaller = "$env:TEMP\vscode-installer.exe"
+
+        Invoke-WebRequest -Uri $vscodeUrl -OutFile $vscodeInstaller -UseBasicParsing
+
+        $installProcess = Start-Process -FilePath $vscodeInstaller -ArgumentList "/VERYSILENT", "/NORESTART", "/MERGETASKS=!runcode,addtopath" -Wait -PassThru
+        if ($installProcess.ExitCode -ne 0) {
+            throw "VS Code installer failed with exit code $($installProcess.ExitCode)"
+        }
+
+        Remove-Item $vscodeInstaller -Force -ErrorAction SilentlyContinue
+    }
+
+    # Add to PATH for current session
+    $vscodeBinPath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin"
+    if (Test-Path $vscodeBinPath) {
+        $env:Path += ";$vscodeBinPath"
+    }
+
+    # Verify
+    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
+    if ($codeCmd) {
+        $version = (code --version 2>$null | Select-Object -First 1)
+        Write-Success "VS Code $version installed"
+    }
+    else {
+        Write-Success "VS Code installed (restart terminal to use 'code' command)"
     }
 }
 
-# Function to download and install Node.js via nvm-windows
+function Install-Git {
+    Write-StepHeader 2 "Installing Git..."
+
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitCmd) {
+        $gitVersion = git --version 2>$null
+        Write-Skip "Git is already installed ($gitVersion)"
+        return
+    }
+
+    # Try winget first
+    $wingetAvailable = Get-Command winget -ErrorAction SilentlyContinue
+    $installed = $false
+
+    if ($wingetAvailable) {
+        Write-DebugOutput "Attempting Git installation via winget..."
+        try {
+            $result = winget install --id Git.Git -e --source winget --silent 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+            }
+            Write-DebugOutput "winget exit code: $LASTEXITCODE"
+        }
+        catch {
+            Write-DebugOutput "winget failed: $($_.Exception.Message)"
+        }
+    }
+
+    # Fallback to direct download
+    if (-not $installed) {
+        Write-DebugOutput "Downloading Git installer..."
+        $gitInstaller = "$env:TEMP\git-installer.exe"
+
+        # Use the GitHub releases latest redirect
+        $gitUrl = "https://github.com/git-for-windows/git/releases/latest/download/Git-64-bit.exe"
+        Write-DebugOutput "Download URL: $gitUrl"
+
+        # Try to get the actual latest release URL via GitHub API
+        try {
+            $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing
+            $asset = $releaseInfo.assets | Where-Object { $_.name -match "Git-.*-64-bit\.exe$" } | Select-Object -First 1
+            if ($asset) {
+                $gitUrl = $asset.browser_download_url
+                Write-DebugOutput "Resolved latest Git URL: $gitUrl"
+            }
+        }
+        catch {
+            Write-DebugOutput "Could not resolve latest Git release, using fallback URL"
+        }
+
+        Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
+
+        $installProcess = Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART" -Wait -PassThru
+        if ($installProcess.ExitCode -ne 0) {
+            throw "Git installer failed with exit code $($installProcess.ExitCode)"
+        }
+
+        Remove-Item $gitInstaller -Force -ErrorAction SilentlyContinue
+    }
+
+    # Add Git to PATH for current session
+    $gitPaths = @("C:\Program Files\Git\bin", "C:\Program Files (x86)\Git\bin")
+    foreach ($gp in $gitPaths) {
+        if (Test-Path $gp) {
+            $env:Path += ";$gp"
+            break
+        }
+    }
+
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitCmd) {
+        $gitVersion = git --version 2>$null
+        Write-Success "Git installed ($gitVersion)"
+    }
+    else {
+        Write-Success "Git installed (restart terminal to use 'git' command)"
+    }
+}
+
+function Set-GitConfig {
+    Write-StepHeader 3 "Configuring Git..."
+
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $gitCmd) {
+        Write-StepError "Git not found in PATH, skipping configuration"
+        return
+    }
+
+    $gitConfig = $script:Config.git.config
+    $gitConfig.PSObject.Properties | ForEach-Object {
+        $key = $_.Name
+        $value = $_.Value
+        Write-DebugOutput "Setting git config: $key = $value"
+        git config --global $key "$value" 2>$null
+    }
+
+    Write-Success "Git configured (default branch: main, editor: VS Code)"
+}
+
 function Install-NodeJS {
-    Write-ColoredOutput "A required tool, Node.js, is missing or outdated. We will install it using nvm for better version management." "Yellow"
+    Write-StepHeader 4 "Installing Node.js..."
 
-    try {
-        # First, install nvm-windows
-        Write-ColoredOutput "Installing nvm-windows (Node Version Manager)..." "Cyan"
+    # Check if Node.js is already installed and meets minimum version
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if ($nodeCmd) {
+        $nodeVersion = node -v 2>$null
+        if (Test-NodeVersion $nodeVersion) {
+            $npmVersion = npm -v 2>$null
+            Write-Skip "Node.js $nodeVersion is already installed (npm v$npmVersion)"
+            return
+        }
+        else {
+            $minVersion = $script:Config.dependencies.nodejs.minimumVersion
+            Write-ColoredOutput "  Node.js $nodeVersion found but v$minVersion+ required. Upgrading..." "Yellow"
+        }
+    }
 
+    # Install nvm-windows
+    $nvmCmd = Get-Command nvm -ErrorAction SilentlyContinue
+    if (-not $nvmCmd) {
+        Write-DebugOutput "Installing nvm-windows..."
         $nvmUrl = $script:Config.urls.nvmWindows
         $nvmInstaller = "$env:TEMP\nvm-setup.exe"
 
-        Write-ColoredOutput "Downloading nvm-windows..." "Cyan"
         Invoke-WebRequest -Uri $nvmUrl -OutFile $nvmInstaller -UseBasicParsing
-
-        Write-ColoredOutput "Installing nvm-windows..." "Cyan"
         Start-Process -FilePath $nvmInstaller -ArgumentList "/S" -Wait
 
         # Add nvm to PATH for current session
@@ -252,512 +344,292 @@ function Install-NodeJS {
         if (Test-Path $nvmPath) {
             $env:Path += ";$nvmPath"
         }
-
-        # Refresh environment variables
         $env:NVM_HOME = "$env:APPDATA\nvm"
         $env:NVM_SYMLINK = "$env:ProgramFiles\nodejs"
 
-        Remove-Item $nvmInstaller -Force
-
-        # Wait a moment for installation to complete
+        Remove-Item $nvmInstaller -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 3
-
-        # Now install Node.js using version from config
-        $nodeConfig = $script:Config.dependencies.nodejs
-        $nodeVersion = $nodeConfig.version
-        Write-ColoredOutput "Installing Node.js v$nodeVersion using nvm..." "Cyan"
-
-        # Use cmd to run nvm commands (nvm-windows is a batch script)
-        $nvmExe = "$env:APPDATA\nvm\nvm.exe"
-        if (-not (Test-Path $nvmExe)) {
-            # Fallback path
-            $nvmExe = "C:\ProgramData\nvm\nvm.exe"
-        }
-
-        if (Test-Path $nvmExe) {
-            # Install Node.js from config
-            Start-Process -FilePath $nvmExe -ArgumentList "install", $nodeVersion -Wait -NoNewWindow
-
-            # Set as default version
-            Start-Process -FilePath $nvmExe -ArgumentList "use", $nodeVersion -Wait -NoNewWindow
-
-            # Add Node.js to PATH for current session
-            $nodeSymlink = "$env:ProgramFiles\nodejs"
-            if (Test-Path $nodeSymlink) {
-                $env:Path += ";$nodeSymlink"
-            }
-        } else {
-            throw "nvm installation failed - executable not found"
-        }
-
-        Write-ColoredOutput "Node.js v$nodeVersion installed successfully via nvm!" "Green"
-        Write-ColoredOutput "You can now use 'nvm list' and 'nvm use <version>' to manage Node.js versions." "Gray"
     }
-    catch {
-        throw "Failed to install Node.js via nvm: $($_.Exception.Message)"
+
+    # Install Node.js LTS via nvm
+    $nvmExe = "$env:APPDATA\nvm\nvm.exe"
+    if (-not (Test-Path $nvmExe)) {
+        $nvmExe = "C:\ProgramData\nvm\nvm.exe"
+    }
+
+    if (Test-Path $nvmExe) {
+        Write-DebugOutput "Installing Node.js LTS via nvm..."
+        Start-Process -FilePath $nvmExe -ArgumentList "install", "lts" -Wait -NoNewWindow
+        Start-Process -FilePath $nvmExe -ArgumentList "use", "lts" -Wait -NoNewWindow
+
+        # Add Node.js to PATH for current session
+        $nodeSymlink = "$env:ProgramFiles\nodejs"
+        if (Test-Path $nodeSymlink) {
+            $env:Path += ";$nodeSymlink"
+        }
+    }
+    else {
+        throw "nvm installation failed - executable not found"
+    }
+
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if ($nodeCmd) {
+        $nodeVersion = node -v 2>$null
+        Write-Success "Node.js $nodeVersion installed via nvm"
+    }
+    else {
+        Write-Success "Node.js LTS installed via nvm (restart terminal to use)"
     }
 }
 
-# Function to install Claude Code
-function Install-ClaudeCode {
-    Write-ColoredOutput "Installing Claude Code..." "Cyan"
+function Update-Npm {
+    Write-StepHeader 5 "Updating npm..."
+
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
+        Write-Skip "npm not found, skipping update"
+        return
+    }
 
     try {
-        $result = npm install -g @anthropic-ai/claude-code 2>&1
+        npm install -g npm@latest 2>&1 | Out-Null
+        $npmVersion = npm -v 2>$null
+        Write-Success "npm updated to v$npmVersion"
+    }
+    catch {
+        Write-DebugOutput "npm update failed: $($_.Exception.Message)"
+        Write-Skip "npm update skipped (current version will work fine)"
+    }
+}
+
+function Install-ClaudeCode {
+    Write-StepHeader 6 "Installing Claude Code..."
+
+    $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
+    if ($claudeCmd) {
+        $claudeVersion = claude --version 2>$null
+        Write-Skip "Claude Code is already installed ($claudeVersion)"
+        return
+    }
+
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
+        throw "npm is required to install Claude Code but was not found"
+    }
+
+    try {
+        npm install -g @anthropic-ai/claude-code 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "npm install failed with exit code $LASTEXITCODE"
         }
-        Write-ColoredOutput "Claude Code installed successfully!" "Green"
+
+        # Verify
+        $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
+        if ($claudeCmd) {
+            $claudeVersion = claude --version 2>$null
+            Write-Success "Claude Code installed ($claudeVersion)"
+        }
+        else {
+            Write-Success "Claude Code installed"
+        }
     }
     catch {
         throw "Failed to install Claude Code: $($_.Exception.Message)"
     }
 }
 
-# Function to copy custom icon to permanent location for context menu integration
-# Copies claude-color.ico from assets/ to %APPDATA%\ClaudeCode\ for persistent storage
-# Returns: $true if successful, $false if icon file missing or copy fails
-function Install-ContextMenuIcon {
-    try {
-        $contextConfig = $script:Config.installer
-        $iconSourceFile = $contextConfig.iconSourceFile
+function Install-VSCodeExtensions {
+    Write-StepHeader 7 "Installing VS Code extensions..."
 
-        # Create ClaudeCode directory in AppData
-        $claudeCodeDir = "$env:APPDATA\ClaudeCode"
-        if (-not (Test-Path $claudeCodeDir)) {
-            New-Item -ItemType Directory -Path $claudeCodeDir -Force | Out-Null
-        }
-
-        # Find the icon file in assets directory
-        $assetsDir = Join-Path (Split-Path $PSScriptRoot -Parent) "assets"
-        $iconSourcePath = Join-Path $assetsDir $iconSourceFile
-
-        if (-not (Test-Path $iconSourcePath)) {
-            Write-ColoredOutput "Warning: Icon file not found at $iconSourcePath, using default icon" "Yellow"
-            return $false
-        }
-
-        # Copy icon to permanent location
-        $iconDestPath = Join-Path $claudeCodeDir $iconSourceFile
-        Copy-Item -Path $iconSourcePath -Destination $iconDestPath -Force
-
-        Write-ColoredOutput "Icon installed to: $iconDestPath" "Gray"
-        return $true
+    # Find the code command
+    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
+    $codePath = if ($codeCmd) {
+        "code"
     }
-    catch {
-        Write-ColoredOutput "Warning: Could not install custom icon: $($_.Exception.Message)" "Yellow"
-        return $false
+    else {
+        $found = Find-VSCodePath
+        if ($found -and $found.EndsWith(".cmd")) { $found } else { $null }
     }
-}
 
-# Function to check if Atlassian MCP server is already configured in Claude Code
-# Executes 'claude mcp list' via Git Bash and searches for 'atlassian' in output
-# Returns: $true if Atlassian MCP server found, $false otherwise
-function Test-AtlassianMCP {
-    try {
-        # Find Git Bash path
-        $bashPath = if (Test-Path "C:\Program Files\Git\bin\bash.exe") {
-            "C:\Program Files\Git\bin\bash.exe"
-        } elseif (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe") {
-            "C:\Program Files (x86)\Git\bin\bash.exe"
-        } else {
-            return $false
-        }
-
-        # Execute claude mcp list and capture output directly
-        $mcpListOutput = & $bashPath "-c" "claude mcp list" 2>&1
-
-        # Check if atlassian is in the output
-        return ($mcpListOutput -match "atlassian")
+    if (-not $codePath) {
+        Write-Skip "VS Code not found in PATH, skipping extension installation"
+        return
     }
-    catch {
-        return $false
-    }
-}
 
-# Function to install Atlassian MCP server for Claude Code
-# Executes 'claude mcp add --transport sse atlassian -s user https://mcp.atlassian.com/v1/sse' via Git Bash
-# Returns: $true if installation successful, $false if failed
-function Install-AtlassianMCP {
-    Write-ColoredOutput "Installing Atlassian MCP server..." "Cyan"
-
-    try {
-        # Find Git Bash path
-        $bashPath = if (Test-Path "C:\Program Files\Git\bin\bash.exe") {
-            "C:\Program Files\Git\bin\bash.exe"
-        } elseif (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe") {
-            "C:\Program Files (x86)\Git\bin\bash.exe"
-        } else {
-            throw "Git Bash not found"
-        }
-
-        # Execute the MCP add command directly using PowerShell's & operator
-        $mcpCommand = "claude mcp add --transport sse atlassian -s user https://mcp.atlassian.com/v1/sse"
-
-        Write-ColoredOutput "Running: $mcpCommand" "Gray"
-
-        # Use PowerShell's & operator with proper argument handling
+    $extensions = $script:Config.vscode.extensions
+    foreach ($ext in $extensions) {
+        Write-DebugOutput "Installing extension: $ext"
         try {
-            $output = & $bashPath "-c" $mcpCommand 2>&1
-            $exitCode = $LASTEXITCODE
+            & $codePath --install-extension $ext --force 2>&1 | Out-Null
+            Write-Success "Extension '$ext' installed"
+        }
+        catch {
+            Write-StepError "Failed to install extension '$ext': $($_.Exception.Message)"
+        }
+    }
+}
 
-            if ($exitCode -eq 0) {
-                Write-ColoredOutput "Command executed successfully" "Gray"
-                $installResult = @{ ExitCode = 0 }
-            } else {
-                Write-ColoredOutput "Command output: $output" "Red"
-                $installResult = @{ ExitCode = $exitCode }
+function Set-VSCodeSettings {
+    Write-StepHeader 8 "Configuring VS Code settings..."
+
+    $settingsDir = "$env:APPDATA\Code\User"
+    $settingsFile = "$settingsDir\settings.json"
+
+    # Ensure directory exists
+    if (-not (Test-Path $settingsDir)) {
+        New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+    }
+
+    # Get desired settings from config
+    $desiredSettings = @{}
+    $script:Config.vscode.settings.PSObject.Properties | ForEach-Object {
+        $desiredSettings[$_.Name] = $_.Value
+    }
+
+    # Load existing settings if they exist
+    $existingSettings = @{}
+    if (Test-Path $settingsFile) {
+        try {
+            $content = Get-Content $settingsFile -Raw
+            if ($content.Trim()) {
+                $parsed = $content | ConvertFrom-Json
+                $parsed.PSObject.Properties | ForEach-Object {
+                    $existingSettings[$_.Name] = $_.Value
+                }
             }
         }
         catch {
-            Write-ColoredOutput "Exception during execution: $($_.Exception.Message)" "Red"
-            $installResult = @{ ExitCode = 1 }
+            Write-DebugOutput "Could not parse existing settings, will create new: $($_.Exception.Message)"
         }
+    }
 
-        if ($installResult.ExitCode -eq 0) {
-            Write-ColoredOutput "Atlassian MCP server installed successfully!" "Green"
-            return $true
-        } else {
-            throw "MCP installation failed with exit code $($installResult.ExitCode)"
-        }
+    # Merge: desired settings override, but keep user's other settings
+    foreach ($key in $desiredSettings.Keys) {
+        $existingSettings[$key] = $desiredSettings[$key]
     }
-    catch {
-        Write-ColoredOutput "Failed to install Atlassian MCP server: $($_.Exception.Message)" "Red"
-        return $false
-    }
+
+    # Write as JSON
+    $jsonOutput = $existingSettings | ConvertTo-Json -Depth 10
+    Set-Content -Path $settingsFile -Value $jsonOutput -Encoding UTF8
+
+    Write-Success "VS Code settings configured ($settingsFile)"
 }
 
-# Function to add Windows Explorer context menu
-function Add-ContextMenu {
-    Write-ColoredOutput "Adding convenient right-click option to Windows Explorer..." "Cyan"
+# ============================================================
+# Main Installation Flow
+# ============================================================
 
-    try {
-        $contextConfig = $script:Config.installer
-
-        # Install custom icon if available
-        $iconInstalled = Install-ContextMenuIcon
-        $iconPath = if ($iconInstalled) {
-            $contextConfig.contextMenuIcon
-        } else {
-            "shell32.dll,3"  # Fallback to default folder icon
-        }
-
-        # Registry paths for folder context menu
-        $folderPath = "HKCU:\Software\Classes\Directory\shell\ClaudeCode"
-        $folderCommandPath = "$folderPath\command"
-
-        # Registry paths for folder background context menu
-        $backgroundPath = "HKCU:\Software\Classes\Directory\Background\shell\ClaudeCode"
-        $backgroundCommandPath = "$backgroundPath\command"
-
-        # Create registry keys for folder context menu
-        New-Item -Path $folderPath -Force | Out-Null
-        New-Item -Path $folderCommandPath -Force | Out-Null
-
-        # Determine Git Bash path
-        $gitBashPath = if (Test-Path "C:\Program Files\Git\bin\bash.exe") {
-            "C:\Program Files\Git\bin\bash.exe"
-        } elseif (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe") {
-            "C:\Program Files (x86)\Git\bin\bash.exe"
-        } else {
-            # Fallback to PowerShell if Git Bash not found
-            "powershell.exe"
-        }
-
-        if ($gitBashPath -like "*bash.exe") {
-            # Use Git Bash - let it handle the directory change natively
-            $commandValue = "`"$gitBashPath`" --cd=`"%V`" -c `"claude`""
-        } else {
-            # Fallback to PowerShell
-            $commandValue = 'powershell.exe -NoExit -Command "Set-Location -Path ''%V''; claude"'
-        }
-
-        # Set values for folder context menu
-        Set-ItemProperty -Path $folderPath -Name "(Default)" -Value $contextConfig.contextMenuText
-        Set-ItemProperty -Path $folderPath -Name "Icon" -Value $iconPath
-        Set-ItemProperty -Path $folderCommandPath -Name "(Default)" -Value $commandValue
-
-        # Create registry keys for folder background context menu
-        New-Item -Path $backgroundPath -Force | Out-Null
-        New-Item -Path $backgroundCommandPath -Force | Out-Null
-
-        # Set values for folder background context menu
-        Set-ItemProperty -Path $backgroundPath -Name "(Default)" -Value $contextConfig.contextMenuText
-        Set-ItemProperty -Path $backgroundPath -Name "Icon" -Value $iconPath
-        Set-ItemProperty -Path $backgroundCommandPath -Name "(Default)" -Value $commandValue
-
-        Write-ColoredOutput "Context menu added successfully!" "Green"
-    }
-    catch {
-        throw "Failed to add context menu: $($_.Exception.Message)"
-    }
-}
-
-# Main installation logic
 try {
     Write-DebugOutput "=== Claude Code Installer Started ==="
     Write-DebugOutput "Script path: $($MyInvocation.MyCommand.Path)"
-    Write-DebugOutput "Working directory: $(Get-Location)"
-    Write-DebugOutput "Debug mode: $Debug"
     Write-DebugOutput "Running as admin: $(Test-Administrator)"
-    
-    # Check if running as administrator
+
+    # Check admin privileges
     if (-not (Test-Administrator)) {
-        Write-DebugOutput "Admin privileges required, requesting elevation..."
         Request-AdminPrivileges -ScriptPath $MyInvocation.MyCommand.Path
         return
     }
-    
-    Write-DebugOutput "Admin privileges confirmed, continuing with installation..."
 
-    # Load configuration after admin check
+    # Load configuration
     try {
         $script:Config = Get-InstallerConfig
     }
     catch {
         Write-Host "Configuration Error: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "Please ensure config.json exists in the src directory and is valid JSON." -ForegroundColor Yellow
         Write-Host "Press any key to exit..." -ForegroundColor Gray
         $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         exit 1
     }
 
-    # Setup environment
+    # Setup
     $Host.UI.RawUI.WindowTitle = "Claude Code Installer"
     Clear-Host
 
     Write-ColoredOutput "========================================" "Magenta"
-    Write-ColoredOutput "    Welcome to Claude Code Installer   " "Magenta"
+    Write-ColoredOutput "   Claude Code One-Click Installer      " "Magenta"
     Write-ColoredOutput "========================================" "Magenta"
-
     Write-ColoredOutput ""
+    Write-ColoredOutput "This will install: VS Code, Git, Node.js, and Claude Code" "White"
+    Write-ColoredOutput "Existing installations will be detected and skipped." "Gray"
 
-    # Check dependencies
-    Write-ColoredOutput "Checking system requirements..." "Cyan"
+    # Run installation steps
+    Install-VSCode           # Step 1
+    Install-Git              # Step 2
+    Set-GitConfig            # Step 3
+    Install-NodeJS           # Step 4
+    Update-Npm               # Step 5
+    Install-ClaudeCode       # Step 6
+    Install-VSCodeExtensions # Step 7
+    Set-VSCodeSettings       # Step 8
 
-    $gitExists = Get-Command git -ErrorAction SilentlyContinue
-    $nodeExists = Get-Command node -ErrorAction SilentlyContinue
-    $nvmExists = Get-Command nvm -ErrorAction SilentlyContinue
-    $nodeVersionOk = $false
+    # ============================================================
+    # Verification Summary
+    # ============================================================
 
-    if ($nodeExists) {
-        $nodeVersion = node -v
-        $nodeVersionOk = Test-NodeVersion $nodeVersion
-        if (-not $nodeVersionOk) {
-            $minVersion = $script:Config.dependencies.nodejs.minimumVersion
-            Write-ColoredOutput "Node.js version $nodeVersion found, but v$minVersion or newer is required." "Yellow"
-        }
-    } elseif ($nvmExists) {
-        # Check if nvm has any Node.js versions installed
+    Write-Host ""
+    Write-ColoredOutput "========================================" "Green"
+    Write-ColoredOutput "       Installation Complete!           " "Green"
+    Write-ColoredOutput "========================================" "Green"
+    Write-Host ""
+    Write-ColoredOutput "Verification:" "Cyan"
+
+    # Check each tool
+    $tools = @(
+        @{ Name = "VS Code"; Cmd = "code --version 2>`$null | Select-Object -First 1" },
+        @{ Name = "Git"; Cmd = "git --version 2>`$null" },
+        @{ Name = "Node.js"; Cmd = "node -v 2>`$null" },
+        @{ Name = "npm"; Cmd = "npm -v 2>`$null" },
+        @{ Name = "Claude Code"; Cmd = "claude --version 2>`$null" }
+    )
+
+    foreach ($tool in $tools) {
         try {
-            $nvmList = nvm list 2>$null
-            $minMajor = $script:Config.dependencies.nodejs.minimumVersion.Split('.')[0]
-            if ($nvmList -match "$minMajor\.\d+\.\d+") {
-                $nodeVersionOk = $true
-                Write-ColoredOutput "Node.js v$minMajor.x found via nvm." "Green"
+            $version = Invoke-Expression $tool.Cmd
+            if ($version) {
+                $padding = ' ' * (16 - $tool.Name.Length)
+                Write-Host "  [OK] $($tool.Name)$padding$version" -ForegroundColor Green
             }
-        } catch {
-            # nvm exists but no suitable Node.js version
-        }
-    }
-
-    # Install dependencies with user prompts
-    Write-ColoredOutput ""
-
-    # Handle Git installation
-    if (-not $gitExists) {
-        Install-Git
-    } else {
-        Write-ColoredOutput "Git is already installed." "Green"
-        if (Get-UserConfirmation "Would you like to reinstall Git anyway?" "N") {
-            Install-Git
-        }
-    }
-
-    # Handle Node.js/nvm installation
-    Write-ColoredOutput ""
-    if (-not $nodeExists -and -not $nvmExists) {
-        Install-NodeJS
-    } elseif (-not $nodeVersionOk) {
-        if ($nvmExists) {
-            $nodeVersion = $script:Config.dependencies.nodejs.version
-            Write-ColoredOutput "nvm is installed but needs Node.js v$nodeVersion." "Yellow"
-            if (Get-UserConfirmation "Install Node.js v$nodeVersion via nvm?" "N") {
-                # Just install Node.js via existing nvm
-                try {
-                    $nvmExe = Get-Command nvm -ErrorAction SilentlyContinue
-                    if ($nvmExe) {
-                        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "nvm", "install", $nodeVersion -Wait -NoNewWindow
-                        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "nvm", "use", $nodeVersion -Wait -NoNewWindow
-                        Write-ColoredOutput "Node.js v$nodeVersion installed via existing nvm!" "Green"
-                    } else {
-                        Install-NodeJS
-                    }
-                } catch {
-                    Install-NodeJS
-                }
-            }
-        } else {
-            $minVersion = $script:Config.dependencies.nodejs.minimumVersion
-            Write-ColoredOutput "Node.js version $nodeVersion found, but v$minVersion or newer is required." "Yellow"
-            if (Get-UserConfirmation "Would you like to reinstall Node.js with nvm-windows?" "N") {
-                Install-NodeJS
+            else {
+                Write-Host "  [--] $($tool.Name)" -ForegroundColor Yellow
             }
         }
-    } else {
-        Write-ColoredOutput "Node.js is already installed and up to date." "Green"
-        if (Get-UserConfirmation "Would you like to reinstall Node.js/nvm anyway?" "N") {
-            Install-NodeJS
+        catch {
+            Write-Host "  [--] $($tool.Name)" -ForegroundColor Yellow
         }
     }
 
-    # Install Claude Code
-    Write-ColoredOutput ""
-
-    # Check if Claude Code is already installed
-    $claudeExists = Get-Command claude -ErrorAction SilentlyContinue
-    if (-not $claudeExists) {
-        Install-ClaudeCode
-    } else {
-        Write-ColoredOutput "Claude Code is already installed." "Green"
-        if (Get-UserConfirmation "Would you like to reinstall Claude Code anyway?" "N") {
-            Install-ClaudeCode
-        }
-    }
-
-    # Handle context menu integration
-    Write-ColoredOutput ""
-
-    # Check if context menu already exists
-    $contextMenuExists = (Test-Path "HKCU:\Software\Classes\Directory\shell\ClaudeCode") -or
-                        (Test-Path "HKCU:\Software\Classes\Directory\Background\shell\ClaudeCode")
-
-    $contextMenuAdded = $false
-
-    if ($contextMenuExists) {
-        Write-ColoredOutput "Windows Explorer context menu for Claude Code is already installed." "Green"
-        Write-ColoredOutput "This adds 'Open with Claude Code' to folder right-click menus." "Gray"
-
-        $userChoice = ""
-        do {
-            Write-Host "What would you like to do? " -NoNewline
-            Write-Host "[K]eep, [U]pdate, or [R]emove? [K/u/r]: " -NoNewline -ForegroundColor Cyan
-            $userChoice = Read-Host
-            if ([string]::IsNullOrWhiteSpace($userChoice)) {
-                $userChoice = "K"
-            }
-            $userChoice = $userChoice.Trim().ToUpper()
-        } while ($userChoice -notin @("K", "KEEP", "U", "UPDATE", "R", "REMOVE"))
-
-        switch ($userChoice) {
-            {$_ -in @("K", "KEEP")} {
-                Write-ColoredOutput "Keeping existing context menu." "Green"
-                $contextMenuAdded = $true
-            }
-            {$_ -in @("U", "UPDATE")} {
-                Write-ColoredOutput "Updating context menu with latest settings..." "Yellow"
-                Add-ContextMenu
-                $contextMenuAdded = $true
-            }
-            {$_ -in @("R", "REMOVE")} {
-                Write-ColoredOutput "Removing context menu..." "Yellow"
-                try {
-                    Remove-Item "HKCU:\Software\Classes\Directory\shell\ClaudeCode" -Recurse -Force -ErrorAction SilentlyContinue
-                    Remove-Item "HKCU:\Software\Classes\Directory\Background\shell\ClaudeCode" -Recurse -Force -ErrorAction SilentlyContinue
-                    Write-ColoredOutput "Context menu removed successfully." "Green"
-                }
-                catch {
-                    Write-ColoredOutput "Warning: Could not fully remove context menu entries." "Yellow"
-                }
-                $contextMenuAdded = $false
-            }
-        }
-    } else {
-        Write-ColoredOutput "The installer can add 'Open with Claude Code' to your Windows Explorer right-click menu." "Cyan"
-        Write-ColoredOutput "This allows you to right-click any folder and launch Claude Code directly." "Gray"
-        if (Get-UserConfirmation "Would you like to add the context menu option?" "Y") {
-            Add-ContextMenu
-            $contextMenuAdded = $true
-        } else {
-            Write-ColoredOutput "Skipping context menu integration." "Yellow"
-        }
-    }
-
-    # Handle Atlassian MCP server installation
-    Write-ColoredOutput ""
-
-    $mcpInstalled = $false
-    $atlassianMCPExists = Test-AtlassianMCP
-
-    if ($atlassianMCPExists) {
-        Write-ColoredOutput "Atlassian MCP server is already configured." "Green"
-        Write-ColoredOutput "This enables Claude Code to access Jira tickets and Confluence pages." "Gray"
-        $mcpInstalled = $true
-    } else {
-        Write-ColoredOutput "The installer can add the Atlassian MCP server to Claude Code." "Cyan"
-        Write-ColoredOutput "This enables access to Jira tickets and Confluence pages directly from Claude Code." "Gray"
-
-        if (Get-UserConfirmation "Would you like to add the Atlassian MCP server?" "Y") {
-            $mcpInstalled = Install-AtlassianMCP
-        } else {
-            Write-ColoredOutput "Skipping Atlassian MCP server installation." "Yellow"
-            Write-ColoredOutput "You can install it later by running this command in Git Bash:" "Gray"
-            Write-ColoredOutput "claude mcp add --transport sse atlassian -s user https://mcp.atlassian.com/v1/sse" "Cyan"
-        }
-    }
-
-    # Success message
-    Write-ColoredOutput ""
-    Write-ColoredOutput "========================================" "Green"
-    Write-ColoredOutput "    Installation Complete!             " "Green"
-    Write-ColoredOutput "========================================" "Green"
-    Write-ColoredOutput ""
-    Write-ColoredOutput "Claude Code has been successfully installed!" "Green"
-    Write-ColoredOutput ""
-    Write-ColoredOutput "How to use:" "White"
-    if ($contextMenuAdded) {
-        Write-ColoredOutput "- Right-click on any project folder and select 'Open with Claude Code'" "White"
-        Write-ColoredOutput "- Or open Git Bash and type 'claude'" "White"
-    } else {
-        Write-ColoredOutput "- Open Git Bash, navigate to your project folder, and type 'claude'" "White"
-        Write-ColoredOutput "- Or run 'claude' from any directory to start in the current location" "White"
-    }
-    Write-ColoredOutput ""
-    Write-ColoredOutput "Important:" "Yellow"
-    Write-ColoredOutput "The first time you open Claude Code, you'll be asked to select a color theme and authenticate." "Yellow"
-    Write-ColoredOutput "Select #2 'Billing Account'. Your browser will open to login, use your Orases Google account to authenticate." "Yellow"
-    if ($mcpInstalled) {
-        Write-ColoredOutput ""
-        Write-ColoredOutput "You'll also be asked to authenticate with Atlassian to enable Jira and Confluence access." "Yellow"
-        Write-ColoredOutput "After opening claude, type `/mcp` and hit Enter" "Yellow"
-    }
-    Write-ColoredOutput ""
-    Write-ColoredOutput "Press any key to exit..." "White"
+    Write-Host ""
+    Write-ColoredOutput "Next steps:" "White"
+    Write-ColoredOutput "  1. Open VS Code (type 'code' in terminal or find it in Start menu)" "White"
+    Write-ColoredOutput "  2. Open a terminal in VS Code (Ctrl + ``)" "White"
+    Write-ColoredOutput "  3. Type 'claude' to start Claude Code" "White"
+    Write-ColoredOutput "  4. You'll be prompted to authenticate on first run" "White"
+    Write-Host ""
+    Write-ColoredOutput "Note: You may need to restart your terminal for all PATH changes to take effect." "Yellow"
+    Write-Host ""
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 catch {
     Write-DebugOutput "Installation failed with error: $($_.Exception.Message)"
     Write-DebugOutput "Stack trace: $($_.ScriptStackTrace)"
-    
-    Write-ColoredOutput ""
+
+    Write-Host ""
     Write-ColoredOutput "========================================" "Red"
-    Write-ColoredOutput "    Installation Failed                " "Red"
+    Write-ColoredOutput "       Installation Failed              " "Red"
     Write-ColoredOutput "========================================" "Red"
-    Write-ColoredOutput ""
+    Write-Host ""
     Write-ColoredOutput "Error: $($_.Exception.Message)" "Red"
-    
+
     if ($Debug) {
-        Write-ColoredOutput ""
+        Write-Host ""
         Write-ColoredOutput "Debug Information:" "Yellow"
         Write-ColoredOutput "Stack trace: $($_.ScriptStackTrace)" "Gray"
-        Write-ColoredOutput "Error details: $($_.Exception | Format-List * | Out-String)" "Gray"
     }
-    
-    Write-ColoredOutput ""
+
+    Write-Host ""
     Write-ColoredOutput "Please check your internet connection and try again." "Yellow"
-    Write-ColoredOutput "If the problem persists, please visit:" "Yellow"
-    Write-ColoredOutput "https://github.com/anthropics/claude-code/issues" "Cyan"
-    Write-ColoredOutput ""
-    Write-ColoredOutput "Press any key to exit..." "White"
+    Write-Host ""
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }

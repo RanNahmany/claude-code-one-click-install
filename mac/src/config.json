@@ -7,10 +7,6 @@
       "minimumVersion": "2.0.0"
     }
   },
-  "urls": {
-    "nvmWindows": "https://github.com/coreybutler/nvm-windows/releases/latest/download/nvm-setup.exe",
-    "vscodeWindows": "https://update.code.visualstudio.com/latest/win32-x64-user/stable"
-  },
   "vscode": {
     "extensions": [
       "anthropics.claude-code"
@@ -37,8 +33,8 @@
       "init.defaultBranch": "main",
       "core.editor": "code --wait",
       "pull.rebase": "false",
-      "core.autocrlf": "true",
-      "credential.helper": "manager"
+      "core.autocrlf": "input",
+      "credential.helper": "osxkeychain"
     }
   }
 }
