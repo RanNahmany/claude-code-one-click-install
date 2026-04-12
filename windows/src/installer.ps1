@@ -358,7 +358,7 @@ function Install-NodeJS {
 
         Invoke-WebRequest -Uri $nvmUrl -OutFile $nvmInstaller -UseBasicParsing
 
-        # nvm-windows uses InnoSetup — /VERYSILENT is the correct silent flag
+        # nvm-windows uses InnoSetup - /VERYSILENT is the correct silent flag
         $installProcess = Start-Process -FilePath $nvmInstaller -ArgumentList "/VERYSILENT", "/NORESTART" -Wait -PassThru
         Write-DebugOutput "nvm-windows installer exit code: $($installProcess.ExitCode)"
 
@@ -509,7 +509,7 @@ function Install-VSCodeExtensions {
     }
 
     if (-not $codePath) {
-        Write-StepError "VS Code 'code' command not found — cannot install extensions"
+        Write-StepError "VS Code 'code' command not found - cannot install extensions"
         Write-ColoredOutput "  Extensions can be installed manually in VS Code: Ctrl+Shift+X" "Yellow"
         return
     }
