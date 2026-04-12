@@ -4,9 +4,9 @@ Automated installer that sets up VS Code, Git, Node.js, and Claude Code on Windo
 
 ## Quick Start
 
-**One-line install** (open Command Prompt or PowerShell):
-```
-curl -L "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/windows/install.bat" -o install.bat && install.bat
+**One-line install** (open PowerShell as Administrator):
+```powershell
+irm "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/windows/install.bat" -OutFile install.bat; .\install.bat
 ```
 
 **Or clone and run:**

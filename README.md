@@ -9,8 +9,8 @@ One-click installer scripts that set up a complete Claude Code development envir
 **Step 1: Open PowerShell as administrator (right-click on PowerShell and select "Run as administrator")**
 
 **Step 2: Copy&Paste the following command into PowerShell and press Enter**
-```bash
-curl -L "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/windows/install.bat" -o install.bat && install.bat
+```powershell
+irm "https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-install/main/windows/install.bat" -OutFile install.bat; .\install.bat
 ```
 
 ### macOS - One-Click install (Recommended)
