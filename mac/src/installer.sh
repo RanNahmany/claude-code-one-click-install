@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 DEBUG_MODE="${DEBUG_MODE:-false}"
-STEP_TOTAL=11
+STEP_TOTAL=12
 CURRENT_STEP=0
 
 # Parse arguments
@@ -359,6 +359,44 @@ install_claude_code() {
     fi
 }
 
+install_bun() {
+    print_step "Installing Bun..."
+
+    if command_exists bun; then
+        local bun_version
+        bun_version=$(bun --version 2>/dev/null)
+        print_skip "Bun is already installed (v$bun_version)"
+        return
+    fi
+
+    # Check if ~/.bun exists even if not in PATH yet
+    if [[ -x "$HOME/.bun/bin/bun" ]]; then
+        export PATH="$HOME/.bun/bin:$PATH"
+        local bun_version
+        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null)
+        print_skip "Bun is already installed (v$bun_version)"
+        return
+    fi
+
+    echo "  Downloading and installing Bun..."
+    curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1 || {
+        print_error "Bun installation failed"
+        return
+    }
+
+    # Source bun for current session
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+
+    if [[ -x "$HOME/.bun/bin/bun" ]]; then
+        local bun_version
+        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null)
+        print_success "Bun v$bun_version installed"
+    else
+        print_error "Bun installation may have failed"
+    fi
+}
+
 install_vscode_extensions() {
     print_step "Installing VS Code extensions..."
 
@@ -440,7 +478,7 @@ main() {
     echo -e "\033[35m             for macOS                   \033[0m"
     echo -e "\033[35m========================================\033[0m"
     echo ""
-    echo "This will install: VS Code, Git, Node.js, and Claude Code"
+    echo "This will install: VS Code, Git, Node.js, Bun, and Claude Code"
     echo -e "\033[90mExisting installations will be detected and skipped.\033[0m"
 
     # Run installation steps
@@ -453,8 +491,9 @@ main() {
     install_nodejs             # Step 7
     update_npm                 # Step 8
     install_claude_code        # Step 9
-    install_vscode_extensions  # Step 10
-    configure_vscode_settings  # Step 11
+    install_bun                # Step 10
+    install_vscode_extensions  # Step 11
+    configure_vscode_settings  # Step 12
 
     # ============================================================
     # Verification Summary
@@ -471,7 +510,10 @@ main() {
     export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
     [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
 
-    local tools=("code:VS Code" "git:Git" "node:Node.js" "npm:npm" "claude:Claude Code")
+    # Ensure bun is in PATH for verification
+    [[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
+
+    local tools=("code:VS Code" "git:Git" "node:Node.js" "npm:npm" "bun:Bun" "claude:Claude Code")
     for tool_entry in "${tools[@]}"; do
         local cmd="${tool_entry%%:*}"
         local name="${tool_entry##*:}"

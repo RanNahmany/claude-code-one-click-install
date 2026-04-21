@@ -86,7 +86,7 @@ function Write-StepHeader {
         [string]$Description
     )
     Write-Host ""
-    Write-Host "[$StepNumber/11] $Description" -ForegroundColor Cyan
+    Write-Host "[$StepNumber/9] $Description" -ForegroundColor Cyan
 }
 
 function Write-Success {
@@ -496,8 +496,54 @@ function Install-ClaudeCode {
     }
 }
 
+function Install-Bun {
+    Write-StepHeader 7 "Installing Bun..."
+
+    # Check if already installed
+    $bunCmd = Get-Command bun -ErrorAction SilentlyContinue
+    $bunPath = "$env:USERPROFILE\.bun\bin\bun.exe"
+
+    if ($bunCmd) {
+        $bunVersion = bun --version 2>$null
+        Write-Skip "Bun is already installed (v$bunVersion)"
+        return
+    }
+
+    if (Test-Path $bunPath) {
+        $env:Path += ";$env:USERPROFILE\.bun\bin"
+        $bunVersion = & $bunPath --version 2>$null
+        Write-Skip "Bun is already installed (v$bunVersion)"
+        return
+    }
+
+    Write-DebugOutput "Installing Bun via bun.sh/install.ps1..."
+    try {
+        # Run the official install script silently
+        $scriptContent = Invoke-RestMethod -Uri "https://bun.sh/install.ps1" -UseBasicParsing
+        Invoke-Expression $scriptContent 2>&1 | Out-Null
+    }
+    catch {
+        Write-StepError "Failed to install Bun: $($_.Exception.Message)"
+        return
+    }
+
+    # Add Bun to PATH for current session
+    if (Test-Path "$env:USERPROFILE\.bun\bin") {
+        $env:Path += ";$env:USERPROFILE\.bun\bin"
+    }
+
+    # Verify
+    if (Test-Path $bunPath) {
+        $bunVersion = & $bunPath --version 2>$null
+        Write-Success "Bun v$bunVersion installed"
+    }
+    else {
+        Write-Success "Bun installed (restart terminal to use 'bun' command)"
+    }
+}
+
 function Install-VSCodeExtensions {
-    Write-StepHeader 7 "Installing VS Code extensions..."
+    Write-StepHeader 8 "Installing VS Code extensions..."
 
     # Find the code CLI command
     $codeCmd = Get-Command code -ErrorAction SilentlyContinue
@@ -541,7 +587,7 @@ function Install-VSCodeExtensions {
 }
 
 function Set-VSCodeSettings {
-    Write-StepHeader 8 "Configuring VS Code settings..."
+    Write-StepHeader 9 "Configuring VS Code settings..."
 
     # Find the correct user's AppData (may differ when running elevated)
     $settingsDir = "$env:APPDATA\Code\User"
@@ -631,7 +677,7 @@ try {
     Write-ColoredOutput "   Claude Code One-Click Installer      " "Magenta"
     Write-ColoredOutput "========================================" "Magenta"
     Write-ColoredOutput ""
-    Write-ColoredOutput "This will install: VS Code, Git, Node.js, and Claude Code" "White"
+    Write-ColoredOutput "This will install: VS Code, Git, Node.js, Bun, and Claude Code" "White"
     Write-ColoredOutput "Existing installations will be detected and skipped." "Gray"
 
     # Run installation steps
@@ -641,8 +687,9 @@ try {
     Install-NodeJS           # Step 4
     Update-Npm               # Step 5
     Install-ClaudeCode       # Step 6
-    Install-VSCodeExtensions # Step 7
-    Set-VSCodeSettings       # Step 8
+    Install-Bun              # Step 7
+    Install-VSCodeExtensions # Step 8
+    Set-VSCodeSettings       # Step 9
 
     # ============================================================
     # Verification Summary
@@ -661,8 +708,14 @@ try {
         @{ Name = "Git"; Cmd = "git"; Args = @("--version") },
         @{ Name = "Node.js"; Cmd = "node"; Args = @("-v") },
         @{ Name = "npm"; Cmd = "npm"; Args = @("-v") },
+        @{ Name = "Bun"; Cmd = "bun"; Args = @("--version") },
         @{ Name = "Claude Code"; Cmd = "claude"; Args = @("--version") }
     )
+
+    # Ensure bun is in PATH for verification
+    if ((Test-Path "$env:USERPROFILE\.bun\bin") -and ($env:Path -notlike "*\.bun\bin*")) {
+        $env:Path += ";$env:USERPROFILE\.bun\bin"
+    }
 
     foreach ($tool in $toolChecks) {
         $padding = ' ' * (16 - $tool.Name.Length)

@@ -84,7 +84,7 @@ function Request-AdminPrivileges {
 # ============================================================
 
 function Uninstall-ClaudeCode {
-    Write-StepHeader 1 6 "Uninstalling Claude Code..."
+    Write-StepHeader 1 7 "Uninstalling Claude Code..."
 
     $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
     if (-not $claudeCmd) {
@@ -110,7 +110,7 @@ function Uninstall-ClaudeCode {
 }
 
 function Uninstall-VSCodeExtensions {
-    Write-StepHeader 2 6 "Removing VS Code extensions..."
+    Write-StepHeader 2 7 "Removing VS Code extensions..."
 
     $codeCmd = Get-Command code -ErrorAction SilentlyContinue
     if (-not $codeCmd) {
@@ -136,7 +136,7 @@ function Uninstall-VSCodeExtensions {
 }
 
 function Uninstall-VSCode {
-    Write-StepHeader 3 6 "Uninstalling VS Code..."
+    Write-StepHeader 3 7 "Uninstalling VS Code..."
 
     # Check if installed
     $vscodeInstalled = (Test-Path "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe") -or
@@ -198,8 +198,39 @@ function Uninstall-VSCode {
     Write-Success "VS Code settings and data cleaned up"
 }
 
+function Uninstall-Bun {
+    Write-StepHeader 4 7 "Uninstalling Bun..."
+
+    $bunDir = "$env:USERPROFILE\.bun"
+    $bunFound = $false
+
+    if (Test-Path $bunDir) {
+        Write-DebugOutput "Removing Bun directory: $bunDir"
+        Remove-Item -Path $bunDir -Recurse -Force -ErrorAction SilentlyContinue
+        $bunFound = $true
+    }
+
+    # Clean bun from user PATH
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    if ($userPath) {
+        $cleanPath = ($userPath -split ';' | Where-Object {
+            $_ -notmatch '\.bun\\bin'
+        }) -join ';'
+        if ($cleanPath -ne $userPath) {
+            [System.Environment]::SetEnvironmentVariable("Path", $cleanPath, "User")
+        }
+    }
+
+    if ($bunFound) {
+        Write-Success "Bun uninstalled"
+    }
+    else {
+        Write-Skip "Bun is not installed"
+    }
+}
+
 function Uninstall-NodeJS {
-    Write-StepHeader 4 6 "Uninstalling Node.js and nvm-windows..."
+    Write-StepHeader 5 7 "Uninstalling Node.js and nvm-windows..."
 
     # Check for nvm-windows
     $nvmDir = "$env:APPDATA\nvm"
@@ -250,7 +281,7 @@ function Uninstall-NodeJS {
 }
 
 function Uninstall-Git {
-    Write-StepHeader 5 6 "Uninstalling Git..."
+    Write-StepHeader 6 7 "Uninstalling Git..."
 
     $gitCmd = Get-Command git -ErrorAction SilentlyContinue
     if (-not $gitCmd) {
@@ -308,7 +339,7 @@ function Uninstall-Git {
 }
 
 function Reset-GitConfig {
-    Write-StepHeader 6 6 "Cleaning up Git configuration..."
+    Write-StepHeader 7 7 "Cleaning up Git configuration..."
 
     $gitconfigPath = "$env:USERPROFILE\.gitconfig"
     if (Test-Path $gitconfigPath) {
@@ -338,7 +369,7 @@ try {
     Write-ColoredOutput "   Claude Code One-Click Uninstaller    " "Red"
     Write-ColoredOutput "========================================" "Red"
     Write-ColoredOutput ""
-    Write-ColoredOutput "This will uninstall: VS Code, Git, Node.js (nvm), and Claude Code" "White"
+    Write-ColoredOutput "This will uninstall: VS Code, Git, Node.js (nvm), Bun, and Claude Code" "White"
     Write-ColoredOutput "WARNING: This will also remove VS Code settings, extensions, and Git config." "Yellow"
     Write-ColoredOutput ""
 
@@ -357,9 +388,10 @@ try {
     Uninstall-ClaudeCode        # Step 1 - Remove Claude Code first (depends on npm)
     Uninstall-VSCodeExtensions  # Step 2 - Remove extensions before VS Code
     Uninstall-VSCode            # Step 3 - Remove VS Code
-    Uninstall-NodeJS            # Step 4 - Remove Node.js and nvm
-    Uninstall-Git               # Step 5 - Remove Git
-    Reset-GitConfig             # Step 6 - Clean up Git config
+    Uninstall-Bun               # Step 4 - Remove Bun
+    Uninstall-NodeJS            # Step 5 - Remove Node.js and nvm
+    Uninstall-Git               # Step 6 - Remove Git
+    Reset-GitConfig             # Step 7 - Clean up Git config
 
     # Summary
     Write-Host ""

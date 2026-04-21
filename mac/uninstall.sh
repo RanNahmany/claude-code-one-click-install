@@ -10,7 +10,7 @@
 set -uo pipefail
 
 DEBUG_MODE=false
-STEP_TOTAL=7
+STEP_TOTAL=8
 CURRENT_STEP=0
 
 for arg in "$@"; do
@@ -136,6 +136,35 @@ uninstall_vscode() {
     fi
 }
 
+uninstall_bun() {
+    print_step "Uninstalling Bun..."
+
+    local bun_found=false
+
+    if [[ -d "$HOME/.bun" ]]; then
+        print_debug "Removing ~/.bun"
+        rm -rf "$HOME/.bun"
+        bun_found=true
+    fi
+
+    # Clean up bun lines from shell profiles
+    local profiles=("$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.zprofile")
+    for profile in "${profiles[@]}"; do
+        if [[ -f "$profile" ]]; then
+            sed -i '' '/BUN_INSTALL/d' "$profile" 2>/dev/null
+            sed -i '' '/\.bun\/bin/d' "$profile" 2>/dev/null
+            sed -i '' '/\.bun\/_bun/d' "$profile" 2>/dev/null
+            print_debug "Cleaned Bun entries from $profile"
+        fi
+    done
+
+    if [[ "$bun_found" == "true" ]]; then
+        print_success "Bun uninstalled"
+    else
+        print_skip "Bun is not installed"
+    fi
+}
+
 uninstall_nodejs_nvm() {
     print_step "Uninstalling Node.js and nvm..."
 
@@ -236,7 +265,7 @@ main() {
     echo -e "\033[31m             for macOS                   \033[0m"
     echo -e "\033[31m========================================\033[0m"
     echo ""
-    echo "This will uninstall: VS Code, Git (Homebrew), Node.js (nvm), Homebrew, and Claude Code"
+    echo "This will uninstall: VS Code, Git (Homebrew), Node.js (nvm), Bun, Homebrew, and Claude Code"
     echo -e "\033[33mWARNING: This will also remove VS Code settings, extensions, and Git config.\033[0m"
     echo -e "\033[90mNote: Xcode Command Line Tools will NOT be removed.\033[0m"
     echo ""
@@ -251,10 +280,11 @@ main() {
     uninstall_claude_code        # Step 1 - Remove Claude Code first (depends on npm)
     uninstall_vscode_extensions  # Step 2 - Remove extensions before VS Code
     uninstall_vscode             # Step 3 - Remove VS Code
-    uninstall_nodejs_nvm         # Step 4 - Remove Node.js and nvm
-    uninstall_git                # Step 5 - Remove Git (Homebrew version only)
-    uninstall_homebrew           # Step 6 - Remove Homebrew
-    clean_git_config             # Step 7 - Clean up any remaining Git config
+    uninstall_bun                # Step 4 - Remove Bun
+    uninstall_nodejs_nvm         # Step 5 - Remove Node.js and nvm
+    uninstall_git                # Step 6 - Remove Git (Homebrew version only)
+    uninstall_homebrew           # Step 7 - Remove Homebrew
+    clean_git_config             # Step 8 - Clean up any remaining Git config
 
     # Summary
     echo ""
