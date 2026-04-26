@@ -369,28 +369,30 @@ install_bun() {
         return
     fi
 
-    # Check if ~/.bun exists even if not in PATH yet
-    if [[ -x "$HOME/.bun/bin/bun" ]]; then
-        export PATH="$HOME/.bun/bin:$PATH"
-        local bun_version
-        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null)
-        print_skip "Bun is already installed (v$bun_version)"
-        return
-    fi
+    # Check if bun exists in Homebrew paths but not in PATH yet
+    local bun_path
+    for bun_path in /opt/homebrew/bin/bun /usr/local/bin/bun "$HOME/.bun/bin/bun"; do
+        if [[ -x "$bun_path" ]]; then
+            local bun_version
+            bun_version=$("$bun_path" --version 2>/dev/null)
+            print_skip "Bun is already installed (v$bun_version)"
+            return
+        fi
+    done
 
-    echo "  Downloading and installing Bun..."
-    curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1 || {
+    echo "  Installing Bun via Homebrew..."
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install oven-sh/bun/bun 2>&1 || {
         print_error "Bun installation failed"
         return
     }
 
-    # Source bun for current session
+    # Ensure bun is in PATH for current session
     export BUN_INSTALL="$HOME/.bun"
     export PATH="$BUN_INSTALL/bin:$PATH"
 
-    if [[ -x "$HOME/.bun/bin/bun" ]]; then
+    if command_exists bun; then
         local bun_version
-        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null)
+        bun_version=$(bun --version 2>/dev/null)
         print_success "Bun v$bun_version installed"
     else
         print_error "Bun installation may have failed"

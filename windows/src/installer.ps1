@@ -516,15 +516,37 @@ function Install-Bun {
         return
     }
 
-    Write-DebugOutput "Installing Bun via bun.sh/install.ps1..."
-    try {
-        # Run the official install script silently
-        $scriptContent = Invoke-RestMethod -Uri "https://bun.sh/install.ps1" -UseBasicParsing
-        Invoke-Expression $scriptContent 2>&1 | Out-Null
+    $installed = $false
+
+    # Try winget first (fully silent, no prompts)
+    $wingetAvailable = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetAvailable) {
+        Write-DebugOutput "Attempting Bun installation via winget..."
+        try {
+            $result = winget install Oven-sh.Bun -e --source winget --accept-package-agreements --accept-source-agreements --silent 2>&1
+            Write-DebugOutput "winget exit code: $LASTEXITCODE"
+            if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+            }
+        }
+        catch {
+            Write-DebugOutput "winget failed: $($_.Exception.Message)"
+        }
     }
-    catch {
-        Write-StepError "Failed to install Bun: $($_.Exception.Message)"
-        return
+
+    # Fallback to official PowerShell installer
+    if (-not $installed) {
+        Write-DebugOutput "Falling back to bun.com/install.ps1..."
+        try {
+            $installScript = Invoke-RestMethod -Uri "https://bun.com/install.ps1" -UseBasicParsing
+            $sb = [scriptblock]::Create($installScript)
+            & $sb 2>&1 | Out-Null
+            $installed = $true
+        }
+        catch {
+            Write-StepError "Failed to install Bun: $($_.Exception.Message)"
+            return
+        }
     }
 
     # Add Bun to PATH for current session
