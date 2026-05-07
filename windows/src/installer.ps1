@@ -86,7 +86,7 @@ function Write-StepHeader {
         [string]$Description
     )
     Write-Host ""
-    Write-Host "[$StepNumber/9] $Description" -ForegroundColor Cyan
+    Write-Host "[$StepNumber/10] $Description" -ForegroundColor Cyan
 }
 
 function Write-Success {
@@ -564,8 +564,79 @@ function Install-Bun {
     }
 }
 
+function Install-GitHubCLI {
+    Write-StepHeader 8 "Installing GitHub CLI..."
+
+    $ghCmd = Get-Command gh -ErrorAction SilentlyContinue
+    if ($ghCmd) {
+        $ghVersion = (gh --version 2>$null | Select-Object -First 1)
+        Write-Skip "GitHub CLI is already installed ($ghVersion)"
+        return
+    }
+
+    $installed = $false
+
+    # Try winget first (fully silent, no prompts)
+    $wingetAvailable = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetAvailable) {
+        Write-DebugOutput "Attempting GitHub CLI installation via winget..."
+        try {
+            $result = winget install --id GitHub.cli -e --source winget --accept-package-agreements --accept-source-agreements --silent 2>&1
+            Write-DebugOutput "winget exit code: $LASTEXITCODE"
+            if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+            }
+        }
+        catch {
+            Write-DebugOutput "winget failed: $($_.Exception.Message)"
+        }
+    }
+
+    # Fallback to direct MSI download
+    if (-not $installed) {
+        Write-DebugOutput "Falling back to GitHub CLI MSI download..."
+        try {
+            $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/cli/cli/releases/latest" -UseBasicParsing
+            $asset = $releaseInfo.assets | Where-Object { $_.name -match "windows_amd64\.msi$" } | Select-Object -First 1
+            if (-not $asset) {
+                throw "Could not find GitHub CLI MSI in latest release"
+            }
+            $msiPath = "$env:TEMP\gh-cli.msi"
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msiPath -UseBasicParsing
+
+            $installProcess = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", "`"$msiPath`"", "/quiet", "/norestart" -Wait -PassThru
+            Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+
+            if ($installProcess.ExitCode -eq 0) {
+                $installed = $true
+            }
+            else {
+                throw "MSI installer exited with code $($installProcess.ExitCode)"
+            }
+        }
+        catch {
+            Write-StepError "Failed to install GitHub CLI: $($_.Exception.Message)"
+            return
+        }
+    }
+
+    # Refresh PATH so gh is available in current session
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+
+    $ghCmd = Get-Command gh -ErrorAction SilentlyContinue
+    if ($ghCmd) {
+        $ghVersion = (gh --version 2>$null | Select-Object -First 1)
+        Write-Success "GitHub CLI installed ($ghVersion)"
+    }
+    else {
+        Write-Success "GitHub CLI installed (restart terminal to use 'gh' command)"
+    }
+}
+
 function Install-VSCodeExtensions {
-    Write-StepHeader 8 "Installing VS Code extensions..."
+    Write-StepHeader 9 "Installing VS Code extensions..."
 
     # Find the code CLI command
     $codeCmd = Get-Command code -ErrorAction SilentlyContinue
@@ -609,7 +680,7 @@ function Install-VSCodeExtensions {
 }
 
 function Set-VSCodeSettings {
-    Write-StepHeader 9 "Configuring VS Code settings..."
+    Write-StepHeader 10 "Configuring VS Code settings..."
 
     # Find the correct user's AppData (may differ when running elevated)
     $settingsDir = "$env:APPDATA\Code\User"
@@ -699,7 +770,7 @@ try {
     Write-ColoredOutput "   Claude Code One-Click Installer      " "Magenta"
     Write-ColoredOutput "========================================" "Magenta"
     Write-ColoredOutput ""
-    Write-ColoredOutput "This will install: VS Code, Git, Node.js, Bun, and Claude Code" "White"
+    Write-ColoredOutput "This will install: VS Code, Git, Node.js, Bun, GitHub CLI, and Claude Code" "White"
     Write-ColoredOutput "Existing installations will be detected and skipped." "Gray"
 
     # Run installation steps
@@ -710,8 +781,9 @@ try {
     Update-Npm               # Step 5
     Install-ClaudeCode       # Step 6
     Install-Bun              # Step 7
-    Install-VSCodeExtensions # Step 8
-    Set-VSCodeSettings       # Step 9
+    Install-GitHubCLI        # Step 8
+    Install-VSCodeExtensions # Step 9
+    Set-VSCodeSettings       # Step 10
 
     # ============================================================
     # Verification Summary
@@ -731,6 +803,7 @@ try {
         @{ Name = "Node.js"; Cmd = "node"; Args = @("-v") },
         @{ Name = "npm"; Cmd = "npm"; Args = @("-v") },
         @{ Name = "Bun"; Cmd = "bun"; Args = @("--version") },
+        @{ Name = "GitHub CLI"; Cmd = "gh"; Args = @("--version") },
         @{ Name = "Claude Code"; Cmd = "claude"; Args = @("--version") }
     )
 

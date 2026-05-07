@@ -10,7 +10,7 @@
 set -uo pipefail
 
 DEBUG_MODE=false
-STEP_TOTAL=8
+STEP_TOTAL=9
 CURRENT_STEP=0
 
 for arg in "$@"; do
@@ -133,6 +133,25 @@ uninstall_vscode() {
     if [[ -f "$HOME/.zshrc" ]]; then
         sed -i '' '/Visual Studio Code/d' "$HOME/.zshrc" 2>/dev/null
         print_debug "Removed VS Code PATH from .zshrc"
+    fi
+}
+
+uninstall_github_cli() {
+    print_step "Uninstalling GitHub CLI..."
+
+    if command_exists brew && brew list gh &>/dev/null; then
+        brew uninstall gh 2>/dev/null && \
+            print_success "GitHub CLI uninstalled" || \
+            print_error "Failed to uninstall GitHub CLI"
+    else
+        print_skip "GitHub CLI was not installed via Homebrew"
+    fi
+
+    # Clean up gh config
+    if [[ -d "$HOME/.config/gh" ]]; then
+        print_debug "Removing ~/.config/gh"
+        rm -rf "$HOME/.config/gh"
+        print_success "GitHub CLI configuration removed"
     fi
 }
 
@@ -265,7 +284,7 @@ main() {
     echo -e "\033[31m             for macOS                   \033[0m"
     echo -e "\033[31m========================================\033[0m"
     echo ""
-    echo "This will uninstall: VS Code, Git (Homebrew), Node.js (nvm), Bun, Homebrew, and Claude Code"
+    echo "This will uninstall: VS Code, Git (Homebrew), Node.js (nvm), Bun, GitHub CLI, Homebrew, and Claude Code"
     echo -e "\033[33mWARNING: This will also remove VS Code settings, extensions, and Git config.\033[0m"
     echo -e "\033[90mNote: Xcode Command Line Tools will NOT be removed.\033[0m"
     echo ""
@@ -280,11 +299,12 @@ main() {
     uninstall_claude_code        # Step 1 - Remove Claude Code first (depends on npm)
     uninstall_vscode_extensions  # Step 2 - Remove extensions before VS Code
     uninstall_vscode             # Step 3 - Remove VS Code
-    uninstall_bun                # Step 4 - Remove Bun
-    uninstall_nodejs_nvm         # Step 5 - Remove Node.js and nvm
-    uninstall_git                # Step 6 - Remove Git (Homebrew version only)
-    uninstall_homebrew           # Step 7 - Remove Homebrew
-    clean_git_config             # Step 8 - Clean up any remaining Git config
+    uninstall_github_cli         # Step 4 - Remove GitHub CLI
+    uninstall_bun                # Step 5 - Remove Bun
+    uninstall_nodejs_nvm         # Step 6 - Remove Node.js and nvm
+    uninstall_git                # Step 7 - Remove Git (Homebrew version only)
+    uninstall_homebrew           # Step 8 - Remove Homebrew
+    clean_git_config             # Step 9 - Clean up any remaining Git config
 
     # Summary
     echo ""

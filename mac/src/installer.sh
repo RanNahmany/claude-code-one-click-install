@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 DEBUG_MODE="${DEBUG_MODE:-false}"
-STEP_TOTAL=12
+STEP_TOTAL=13
 CURRENT_STEP=0
 
 # Parse arguments
@@ -399,6 +399,31 @@ install_bun() {
     fi
 }
 
+install_github_cli() {
+    print_step "Installing GitHub CLI..."
+
+    if command_exists gh; then
+        local gh_version
+        gh_version=$(gh --version 2>/dev/null | head -1)
+        print_skip "GitHub CLI is already installed ($gh_version)"
+        return
+    fi
+
+    echo "  Installing GitHub CLI via Homebrew..."
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install gh 2>&1 || {
+        print_error "GitHub CLI installation failed"
+        return
+    }
+
+    if command_exists gh; then
+        local gh_version
+        gh_version=$(gh --version 2>/dev/null | head -1)
+        print_success "GitHub CLI installed ($gh_version)"
+    else
+        print_error "GitHub CLI installation may have failed"
+    fi
+}
+
 install_vscode_extensions() {
     print_step "Installing VS Code extensions..."
 
@@ -480,7 +505,7 @@ main() {
     echo -e "\033[35m             for macOS                   \033[0m"
     echo -e "\033[35m========================================\033[0m"
     echo ""
-    echo "This will install: VS Code, Git, Node.js, Bun, and Claude Code"
+    echo "This will install: VS Code, Git, Node.js, Bun, GitHub CLI, and Claude Code"
     echo -e "\033[90mExisting installations will be detected and skipped.\033[0m"
 
     # Run installation steps
@@ -494,8 +519,9 @@ main() {
     update_npm                 # Step 8
     install_claude_code        # Step 9
     install_bun                # Step 10
-    install_vscode_extensions  # Step 11
-    configure_vscode_settings  # Step 12
+    install_github_cli         # Step 11
+    install_vscode_extensions  # Step 12
+    configure_vscode_settings  # Step 13
 
     # ============================================================
     # Verification Summary
@@ -515,7 +541,7 @@ main() {
     # Ensure bun is in PATH for verification
     [[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
 
-    local tools=("code:VS Code" "git:Git" "node:Node.js" "npm:npm" "bun:Bun" "claude:Claude Code")
+    local tools=("code:VS Code" "git:Git" "node:Node.js" "npm:npm" "bun:Bun" "gh:GitHub CLI" "claude:Claude Code")
     for tool_entry in "${tools[@]}"; do
         local cmd="${tool_entry%%:*}"
         local name="${tool_entry##*:}"
