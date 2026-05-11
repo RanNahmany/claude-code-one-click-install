@@ -131,8 +131,19 @@ install_homebrew() {
     echo "  Downloading and installing Homebrew..."
     echo "  You may be prompted for your password."
 
-    # Install Homebrew non-interactively
-    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Homebrew's installer requires sudo. We avoid NONINTERACTIVE=1 because it
+    # demands passwordless sudo, which most admin users do not have configured.
+    # Running interactively lets sudo prompt for the user's password on the TTY.
+    local brew_installer
+    brew_installer=$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)
+    if [[ -t 0 ]]; then
+        /bin/bash -c "$brew_installer"
+    elif [[ -e /dev/tty ]]; then
+        /bin/bash -c "$brew_installer" < /dev/tty
+    else
+        # No TTY available — fall back to non-interactive (requires passwordless sudo).
+        NONINTERACTIVE=1 /bin/bash -c "$brew_installer"
+    fi
 
     # Add Homebrew to PATH based on architecture
     local arch

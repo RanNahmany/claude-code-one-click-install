@@ -27,7 +27,7 @@ echo "========================================"
 echo ""
 
 # Determine script directory (works for both local and piped execution)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null || echo ".")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo ".")" && pwd)"
 
 # Check if local files exist
 if [[ -f "$SCRIPT_DIR/src/installer.sh" && -f "$SCRIPT_DIR/src/config.json" ]]; then
@@ -57,5 +57,11 @@ else
 
     echo "Files downloaded successfully!"
     echo ""
-    bash "$TEMP_DIR/src/installer.sh" "$@"
+    # Re-attach a TTY to stdin when piped via curl | bash, so sudo (and any
+    # interactive prompts) can read the user's input.
+    if [[ ! -t 0 && -e /dev/tty ]]; then
+        bash "$TEMP_DIR/src/installer.sh" "$@" < /dev/tty
+    else
+        bash "$TEMP_DIR/src/installer.sh" "$@"
+    fi
 fi
