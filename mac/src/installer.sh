@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 DEBUG_MODE="${DEBUG_MODE:-false}"
-STEP_TOTAL=13
+STEP_TOTAL=12
 CURRENT_STEP=0
 
 # Parse arguments
@@ -370,46 +370,6 @@ install_claude_code() {
     fi
 }
 
-install_bun() {
-    print_step "Installing Bun..."
-
-    if command_exists bun; then
-        local bun_version
-        bun_version=$(bun --version 2>/dev/null)
-        print_skip "Bun is already installed (v$bun_version)"
-        return
-    fi
-
-    # Check if bun exists in Homebrew paths but not in PATH yet
-    local bun_path
-    for bun_path in /opt/homebrew/bin/bun /usr/local/bin/bun "$HOME/.bun/bin/bun"; do
-        if [[ -x "$bun_path" ]]; then
-            local bun_version
-            bun_version=$("$bun_path" --version 2>/dev/null)
-            print_skip "Bun is already installed (v$bun_version)"
-            return
-        fi
-    done
-
-    echo "  Installing Bun via Homebrew..."
-    HOMEBREW_NO_AUTO_UPDATE=1 brew install oven-sh/bun/bun 2>&1 || {
-        print_error "Bun installation failed"
-        return
-    }
-
-    # Ensure bun is in PATH for current session
-    export BUN_INSTALL="$HOME/.bun"
-    export PATH="$BUN_INSTALL/bin:$PATH"
-
-    if command_exists bun; then
-        local bun_version
-        bun_version=$(bun --version 2>/dev/null)
-        print_success "Bun v$bun_version installed"
-    else
-        print_error "Bun installation may have failed"
-    fi
-}
-
 install_github_cli() {
     print_step "Installing GitHub CLI..."
 
@@ -516,7 +476,7 @@ main() {
     echo -e "\033[35m             for macOS                   \033[0m"
     echo -e "\033[35m========================================\033[0m"
     echo ""
-    echo "This will install: VS Code, Git, Node.js, Bun, GitHub CLI, and Claude Code"
+    echo "This will install: VS Code, Git, Node.js, GitHub CLI, and Claude Code"
     echo -e "\033[90mExisting installations will be detected and skipped.\033[0m"
 
     # Run installation steps
@@ -529,10 +489,9 @@ main() {
     install_nodejs             # Step 7
     update_npm                 # Step 8
     install_claude_code        # Step 9
-    install_bun                # Step 10
-    install_github_cli         # Step 11
-    install_vscode_extensions  # Step 12
-    configure_vscode_settings  # Step 13
+    install_github_cli         # Step 10
+    install_vscode_extensions  # Step 11
+    configure_vscode_settings  # Step 12
 
     # ============================================================
     # Verification Summary
@@ -549,10 +508,7 @@ main() {
     export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
     [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
 
-    # Ensure bun is in PATH for verification
-    [[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
-
-    local tools=("code:VS Code" "git:Git" "node:Node.js" "npm:npm" "bun:Bun" "gh:GitHub CLI" "claude:Claude Code")
+    local tools=("code:VS Code" "git:Git" "node:Node.js" "npm:npm" "gh:GitHub CLI" "claude:Claude Code")
     for tool_entry in "${tools[@]}"; do
         local cmd="${tool_entry%%:*}"
         local name="${tool_entry##*:}"
