@@ -84,7 +84,7 @@ function Request-AdminPrivileges {
 # ============================================================
 
 function Uninstall-ClaudeCode {
-    Write-StepHeader 1 8 "Uninstalling Claude Code..."
+    Write-StepHeader 1 7 "Uninstalling Claude Code..."
 
     $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
     if (-not $claudeCmd) {
@@ -110,7 +110,7 @@ function Uninstall-ClaudeCode {
 }
 
 function Uninstall-VSCodeExtensions {
-    Write-StepHeader 2 8 "Removing VS Code extensions..."
+    Write-StepHeader 2 7 "Removing VS Code extensions..."
 
     $codeCmd = Get-Command code -ErrorAction SilentlyContinue
     if (-not $codeCmd) {
@@ -136,7 +136,7 @@ function Uninstall-VSCodeExtensions {
 }
 
 function Uninstall-VSCode {
-    Write-StepHeader 3 8 "Uninstalling VS Code..."
+    Write-StepHeader 3 7 "Uninstalling VS Code..."
 
     # Check if installed
     $vscodeInstalled = (Test-Path "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe") -or
@@ -199,7 +199,7 @@ function Uninstall-VSCode {
 }
 
 function Uninstall-GitHubCLI {
-    Write-StepHeader 4 8 "Uninstalling GitHub CLI..."
+    Write-StepHeader 4 7 "Uninstalling GitHub CLI..."
 
     $ghCmd = Get-Command gh -ErrorAction SilentlyContinue
     $ghInstalled = $ghCmd -or (Test-Path "C:\Program Files\GitHub CLI\gh.exe") -or (Test-Path "C:\Program Files (x86)\GitHub CLI\gh.exe")
@@ -253,39 +253,8 @@ function Uninstall-GitHubCLI {
     }
 }
 
-function Uninstall-Bun {
-    Write-StepHeader 5 8 "Uninstalling Bun..."
-
-    $bunDir = "$env:USERPROFILE\.bun"
-    $bunFound = $false
-
-    if (Test-Path $bunDir) {
-        Write-DebugOutput "Removing Bun directory: $bunDir"
-        Remove-Item -Path $bunDir -Recurse -Force -ErrorAction SilentlyContinue
-        $bunFound = $true
-    }
-
-    # Clean bun from user PATH
-    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-    if ($userPath) {
-        $cleanPath = ($userPath -split ';' | Where-Object {
-            $_ -notmatch '\.bun\\bin'
-        }) -join ';'
-        if ($cleanPath -ne $userPath) {
-            [System.Environment]::SetEnvironmentVariable("Path", $cleanPath, "User")
-        }
-    }
-
-    if ($bunFound) {
-        Write-Success "Bun uninstalled"
-    }
-    else {
-        Write-Skip "Bun is not installed"
-    }
-}
-
 function Uninstall-NodeJS {
-    Write-StepHeader 6 8 "Uninstalling Node.js and nvm-windows..."
+    Write-StepHeader 5 7 "Uninstalling Node.js and nvm-windows..."
 
     # Check for nvm-windows
     $nvmDir = "$env:APPDATA\nvm"
@@ -336,7 +305,7 @@ function Uninstall-NodeJS {
 }
 
 function Uninstall-Git {
-    Write-StepHeader 7 8 "Uninstalling Git..."
+    Write-StepHeader 6 7 "Uninstalling Git..."
 
     $gitCmd = Get-Command git -ErrorAction SilentlyContinue
     if (-not $gitCmd) {
@@ -394,7 +363,7 @@ function Uninstall-Git {
 }
 
 function Reset-GitConfig {
-    Write-StepHeader 8 8 "Cleaning up Git configuration..."
+    Write-StepHeader 7 7 "Cleaning up Git configuration..."
 
     $gitconfigPath = "$env:USERPROFILE\.gitconfig"
     if (Test-Path $gitconfigPath) {
@@ -424,7 +393,7 @@ try {
     Write-ColoredOutput "   Claude Code One-Click Uninstaller    " "Red"
     Write-ColoredOutput "========================================" "Red"
     Write-ColoredOutput ""
-    Write-ColoredOutput "This will uninstall: VS Code, Git, Node.js (nvm), Bun, GitHub CLI, and Claude Code" "White"
+    Write-ColoredOutput "This will uninstall: VS Code, Git, Node.js (nvm), GitHub CLI, and Claude Code" "White"
     Write-ColoredOutput "WARNING: This will also remove VS Code settings, extensions, and Git config." "Yellow"
     Write-ColoredOutput ""
 
@@ -444,10 +413,9 @@ try {
     Uninstall-VSCodeExtensions  # Step 2 - Remove extensions before VS Code
     Uninstall-VSCode            # Step 3 - Remove VS Code
     Uninstall-GitHubCLI         # Step 4 - Remove GitHub CLI
-    Uninstall-Bun               # Step 5 - Remove Bun
-    Uninstall-NodeJS            # Step 6 - Remove Node.js and nvm
-    Uninstall-Git               # Step 7 - Remove Git
-    Reset-GitConfig             # Step 8 - Clean up Git config
+    Uninstall-NodeJS            # Step 5 - Remove Node.js and nvm
+    Uninstall-Git               # Step 6 - Remove Git
+    Reset-GitConfig             # Step 7 - Clean up Git config
 
     # Summary
     Write-Host ""
