@@ -57,6 +57,16 @@ command_exists() {
     command -v "$1" &>/dev/null
 }
 
+# Prints the version, and only succeeds if claude actually runs. A broken npm
+# install leaves a placeholder binary on PATH that exits non-zero, so
+# `command_exists claude` on its own is not proof of a working install.
+get_claude_version() {
+    local version
+    version=$(claude --version 2>/dev/null) || return 1
+    [[ -n "$version" ]] || return 1
+    echo "$version"
+}
+
 # Read a value from config.json using python3 (always available on macOS)
 config_get() {
     python3 -c "
@@ -347,26 +357,58 @@ install_claude_code() {
     export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
     [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
 
-    if command_exists claude; then
-        local claude_ver
-        claude_ver=$(claude --version 2>/dev/null)
+    # The native installer puts claude here; make it visible to this session so
+    # the checks below can find a freshly installed binary.
+    [[ ":$PATH:" == *":$HOME/.local/bin:"* ]] || export PATH="$HOME/.local/bin:$PATH"
+
+    local claude_ver
+    if claude_ver=$(get_claude_version); then
         print_skip "Claude Code is already installed ($claude_ver)"
         return
     fi
 
+    # A claude on PATH that will not run is npm's placeholder, left behind when
+    # the platform-specific optional dependency or its postinstall step was
+    # skipped. Clear it out so the native installer's launcher wins.
+    if command_exists claude && command_exists npm; then
+        print_debug "Found a 'claude' command that does not run, removing the npm package"
+        npm uninstall -g @anthropic-ai/claude-code &>/dev/null || true
+    fi
+
+    # Native installer first: a real signed binary, no optional-dependency
+    # resolution to go wrong, and it keeps itself up to date.
+    local installer_url
+    installer_url=$(config_get "urls.claudeCodeInstaller")
+    print_debug "Installing Claude Code via the native installer: $installer_url"
+    if [[ "$DEBUG_MODE" == "true" ]]; then
+        curl -fsSL "$installer_url" | bash || print_debug "Native installer failed, falling back to npm"
+    else
+        curl -fsSL "$installer_url" | bash &>/dev/null || true
+    fi
+
+    hash -r 2>/dev/null || true
+    if claude_ver=$(get_claude_version); then
+        print_success "Claude Code installed ($claude_ver)"
+        return
+    fi
+
+    # Fallback: npm. --include=optional guards against an .npmrc that disables
+    # optional dependencies, which is exactly what leaves the placeholder behind.
     if ! command_exists npm; then
-        print_error "npm is required to install Claude Code but was not found"
+        print_error "Claude Code installation failed and npm is not available as a fallback"
         exit 1
     fi
 
-    npm install -g @anthropic-ai/claude-code
+    print_debug "Falling back to npm install -g @anthropic-ai/claude-code"
+    npm install -g @anthropic-ai/claude-code --include=optional
 
-    if command_exists claude; then
-        local claude_ver
-        claude_ver=$(claude --version 2>/dev/null)
+    hash -r 2>/dev/null || true
+    if claude_ver=$(get_claude_version); then
         print_success "Claude Code installed ($claude_ver)"
     else
-        print_success "Claude Code installed"
+        print_error "Claude Code was installed but the 'claude' command does not run."
+        print_error "Install it manually with: curl -fsSL https://claude.ai/install.sh | bash"
+        exit 1
     fi
 }
 
@@ -514,7 +556,15 @@ main() {
         local name="${tool_entry##*:}"
         local version=""
 
-        if command_exists "$cmd"; then
+        if [[ "$cmd" == "claude" ]] && command_exists claude; then
+            local padding
+            padding=$(printf '%*s' $((16 - ${#name})) '')
+            if version=$(get_claude_version); then
+                echo -e "  \033[32m[OK]\033[0m $name$padding$version"
+            else
+                echo -e "  \033[33m[--]\033[0m $name$padding(installed but not running)"
+            fi
+        elif command_exists "$cmd"; then
             version=$("$cmd" --version 2>/dev/null | head -1)
             local padding
             padding=$(printf '%*s' $((16 - ${#name})) '')

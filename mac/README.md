@@ -26,7 +26,7 @@ bash install.sh
 6. **nvm** — Installs Node Version Manager
 7. **Node.js** — Installs LTS version via nvm
 8. **npm** — Updates to latest version
-9. **Claude Code** — Installs globally via npm
+9. **Claude Code** — Installs via the official native installer (falls back to npm)
 10. **VS Code Extensions** — Installs Claude Code extension
 11. **VS Code Settings** — Configures auto-save, font size, formatting, etc.
 

@@ -7,6 +7,9 @@
       "minimumVersion": "2.0.0"
     }
   },
+  "urls": {
+    "claudeCodeInstaller": "https://claude.ai/install.sh"
+  },
   "vscode": {
     "extensions": [
       "anthropic.claude-code"

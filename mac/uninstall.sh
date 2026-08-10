@@ -62,12 +62,19 @@ uninstall_claude_code() {
     export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
     [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
 
-    if ! command_exists claude; then
+    if ! command_exists claude && [[ ! -e "$HOME/.local/bin/claude" ]] && [[ ! -d "$HOME/.local/share/claude" ]]; then
         print_skip "Claude Code is not installed"
     else
-        npm uninstall -g @anthropic-ai/claude-code 2>/dev/null && \
-            print_success "Claude Code uninstalled" || \
-            print_error "Failed to uninstall Claude Code"
+        # Native install (current default)
+        rm -f "$HOME/.local/bin/claude"
+        rm -rf "$HOME/.local/share/claude"
+
+        # npm install (fallback path, and older versions of this installer)
+        if command_exists npm; then
+            npm uninstall -g @anthropic-ai/claude-code &>/dev/null || true
+        fi
+
+        print_success "Claude Code uninstalled"
     fi
 
     # Clean up Claude Code config

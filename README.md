@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/RanNahmany/claude-code-one-click-in
 | **Claude Code Extension** | Pre-installed in VS Code |
 | **Git** | Configured with best practices (default branch: main, VS Code as editor) |
 | **Node.js** | Latest LTS version via nvm (with npm updated to latest) |
-| **Claude Code** | Latest version (native installer on Windows, npm on macOS) |
+| **Claude Code** | Latest version via the official native installer (npm fallback) |
 
 ## After Installation
 
