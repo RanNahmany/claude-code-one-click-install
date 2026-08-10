@@ -9,7 +9,8 @@
   },
   "urls": {
     "nvmWindows": "https://github.com/coreybutler/nvm-windows/releases/latest/download/nvm-setup.exe",
-    "vscodeWindows": "https://update.code.visualstudio.com/latest/win32-x64-user/stable"
+    "vscodeWindows": "https://update.code.visualstudio.com/latest/win32-x64-user/stable",
+    "claudeCodeInstaller": "https://claude.ai/install.ps1"
   },
   "vscode": {
     "extensions": [

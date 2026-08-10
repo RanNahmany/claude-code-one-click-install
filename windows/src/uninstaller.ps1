@@ -86,14 +86,32 @@ function Request-AdminPrivileges {
 function Uninstall-ClaudeCode {
     Write-StepHeader 1 7 "Uninstalling Claude Code..."
 
+    $nativeBin = "$env:USERPROFILE\.local\bin\claude.exe"
+    $nativeDir = "$env:USERPROFILE\.local\share\claude"
     $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
-    if (-not $claudeCmd) {
+
+    if (-not $claudeCmd -and -not (Test-Path $nativeBin) -and -not (Test-Path $nativeDir)) {
         Write-Skip "Claude Code is not installed"
         return
     }
 
     try {
-        npm uninstall -g @anthropic-ai/claude-code 2>&1 | Out-Null
+        # Native install (current default)
+        Remove-Item -Path $nativeBin -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $nativeDir -Recurse -Force -ErrorAction SilentlyContinue
+
+        # npm install (fallback path, and older versions of this installer)
+        if (Get-Command npm -ErrorAction SilentlyContinue) {
+            npm uninstall -g @anthropic-ai/claude-code 2>&1 | Out-Null
+
+            $npmPrefix = (npm prefix -g 2>$null | Select-Object -First 1)
+            if ($npmPrefix) {
+                foreach ($shim in @("claude", "claude.cmd", "claude.ps1")) {
+                    Remove-Item -Path (Join-Path $npmPrefix $shim) -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
         Write-Success "Claude Code uninstalled"
     }
     catch {

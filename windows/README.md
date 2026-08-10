@@ -23,7 +23,7 @@ install.bat
 3. **Git Config** — Sets default branch to `main`, editor to VS Code, credential helper
 4. **Node.js** — Installs nvm-windows, then Node.js LTS via nvm
 5. **npm** — Updates to latest version
-6. **Claude Code** — Installs globally via npm
+6. **Claude Code** — Installs via the official native installer (falls back to npm)
 7. **VS Code Extensions** — Installs Claude Code extension
 8. **VS Code Settings** — Configures auto-save, font size, formatting, etc.
 

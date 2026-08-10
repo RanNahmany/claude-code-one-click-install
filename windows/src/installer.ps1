@@ -104,6 +104,43 @@ function Write-StepError {
     Write-Host "  [FAIL] $Message" -ForegroundColor Red
 }
 
+function Update-SessionPath {
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machinePath;$userPath"
+
+    # The native Claude Code installer drops its binary here and updates the user
+    # PATH, but a freshly elevated session may not pick that up until restart.
+    $localBin = Join-Path $env:USERPROFILE ".local\bin"
+    if ((Test-Path $localBin) -and ($env:Path -notlike "*$localBin*")) {
+        $env:Path += ";$localBin"
+    }
+}
+
+function Get-ClaudeVersion {
+    # Returns the version string, or $null if claude is missing OR present but
+    # not runnable. A broken npm install leaves a placeholder claude.exe behind
+    # that PowerShell rejects with a *terminating* error ("not a valid
+    # application for this OS platform"), so this must never be called bare.
+    $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
+    if (-not $claudeCmd) {
+        return $null
+    }
+
+    try {
+        $version = & claude --version 2>$null | Select-Object -First 1
+        if ($LASTEXITCODE -eq 0 -and $version) {
+            return $version.ToString().Trim()
+        }
+        Write-DebugOutput "claude --version exited with code $LASTEXITCODE"
+        return $null
+    }
+    catch {
+        Write-DebugOutput "claude --version could not run: $($_.Exception.Message)"
+        return $null
+    }
+}
+
 function Test-NodeVersion {
     param([string]$Version)
 
@@ -460,39 +497,91 @@ function Update-Npm {
     }
 }
 
+function Remove-BrokenClaudeInstall {
+    # A `claude` command that exists but won't run means npm left its placeholder
+    # binary in place (the platform-specific optional dependency or its postinstall
+    # step was skipped). Clear it out so the native installer's shim wins on PATH.
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
+        return
+    }
+
+    npm uninstall -g @anthropic-ai/claude-code 2>&1 | Out-Null
+
+    # npm does not always clean up its shims, and a leftover claude.ps1 keeps
+    # pointing at the placeholder .exe.
+    $npmPrefix = (npm prefix -g 2>$null | Select-Object -First 1)
+    if ($npmPrefix) {
+        foreach ($shim in @("claude", "claude.cmd", "claude.ps1")) {
+            Remove-Item -Path (Join-Path $npmPrefix $shim) -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    Update-SessionPath
+}
+
 function Install-ClaudeCode {
     Write-StepHeader 6 "Installing Claude Code..."
 
-    $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
-    if ($claudeCmd) {
-        $claudeVersion = claude --version 2>$null
+    $claudeVersion = Get-ClaudeVersion
+    if ($claudeVersion) {
         Write-Skip "Claude Code is already installed ($claudeVersion)"
         return
     }
 
-    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $npmCmd) {
-        throw "npm is required to install Claude Code but was not found"
+    if (Get-Command claude -ErrorAction SilentlyContinue) {
+        Write-DebugOutput "Found a 'claude' command that does not run, removing it"
+        Remove-BrokenClaudeInstall
     }
 
+    # Native installer first: it ships a real signed binary, has no optional
+    # dependency resolution to go wrong, and keeps itself up to date.
+    $tempScript = Join-Path $env:TEMP "claude-code-install.ps1"
     try {
-        npm install -g @anthropic-ai/claude-code 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "npm install failed with exit code $LASTEXITCODE"
-        }
+        Write-DebugOutput "Downloading the native installer from $($script:Config.urls.claudeCodeInstaller)"
+        $installScript = Invoke-RestMethod -Uri $script:Config.urls.claudeCodeInstaller
+        Set-Content -Path $tempScript -Value $installScript -Encoding UTF8
 
-        # Verify
-        $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
-        if ($claudeCmd) {
-            $claudeVersion = claude --version 2>$null
-            Write-Success "Claude Code installed ($claudeVersion)"
-        }
-        else {
-            Write-Success "Claude Code installed"
-        }
+        # Run it in its own process: the script calls exit on failure, which would
+        # otherwise tear down this installer without an error message.
+        powershell -NoProfile -ExecutionPolicy Bypass -File $tempScript 2>&1 | Out-Null
+        Write-DebugOutput "Native installer exited with code $LASTEXITCODE"
+        Update-SessionPath
     }
     catch {
-        throw "Failed to install Claude Code: $($_.Exception.Message)"
+        Write-DebugOutput "Native installer failed: $($_.Exception.Message)"
+    }
+    finally {
+        Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+    }
+
+    $claudeVersion = Get-ClaudeVersion
+    if ($claudeVersion) {
+        Write-Success "Claude Code installed ($claudeVersion)"
+        return
+    }
+
+    # Fallback: npm. --include=optional guards against an .npmrc or CI-style
+    # config that disables optional dependencies, which is exactly what leaves
+    # the unrunnable placeholder binary behind.
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
+        throw "Claude Code installation failed and npm is not available as a fallback"
+    }
+
+    Write-DebugOutput "Falling back to npm install -g @anthropic-ai/claude-code"
+    npm install -g @anthropic-ai/claude-code --include=optional 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "npm install failed with exit code $LASTEXITCODE"
+    }
+    Update-SessionPath
+
+    $claudeVersion = Get-ClaudeVersion
+    if ($claudeVersion) {
+        Write-Success "Claude Code installed ($claudeVersion)"
+    }
+    else {
+        throw "Claude Code was installed but the 'claude' command does not run. Install it manually with: irm https://claude.ai/install.ps1 | iex"
     }
 }
 
@@ -741,7 +830,18 @@ try {
         $padding = ' ' * (16 - $tool.Name.Length)
         try {
             $cmd = Get-Command $tool.Cmd -ErrorAction SilentlyContinue
-            if ($cmd) {
+            if ($cmd -and $tool.Cmd -eq "claude") {
+                # Never invoke claude directly: a broken install throws a
+                # terminating error instead of returning a version.
+                $version = Get-ClaudeVersion
+                if ($version) {
+                    Write-Host "  [OK] $($tool.Name)$padding$version" -ForegroundColor Green
+                }
+                else {
+                    Write-Host "  [--] $($tool.Name)${padding}installed but not running" -ForegroundColor Yellow
+                }
+            }
+            elseif ($cmd) {
                 $version = (& $tool.Cmd $tool.Args 2>$null | Select-Object -First 1)
                 if ($version) {
                     Write-Host "  [OK] $($tool.Name)$padding$version" -ForegroundColor Green

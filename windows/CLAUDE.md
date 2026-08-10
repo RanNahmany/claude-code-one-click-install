@@ -31,7 +31,7 @@ Windows one-click installer for Claude Code. Installs VS Code, Git, Node.js (via
 3. Configure Git global settings
 4. Install nvm-windows + Node.js LTS
 5. Update npm to latest
-6. Install Claude Code via npm
+6. Install Claude Code via the official native installer (npm fallback)
 7. Install VS Code extensions
 8. Configure VS Code settings (merge with existing)
 
@@ -42,6 +42,7 @@ Windows one-click installer for Claude Code. Installs VS Code, Git, Node.js (via
 - **Config-driven**: All settings in JSON, no hardcoded values in scripts
 - **PATH management**: Add newly installed tools to `$env:Path` for current session
 - **VS Code settings merge**: Don't overwrite user's existing settings, only add/override configured keys
+- **Never invoke `claude` bare**: always go through `Get-ClaudeVersion`. A broken npm install leaves an unrunnable placeholder `claude.exe` on PATH, and PowerShell raises a *terminating* error for it ("not a valid application for this OS platform") that aborts the whole installer
 
 ## Testing
 
