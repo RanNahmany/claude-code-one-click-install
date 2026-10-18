@@ -576,13 +576,21 @@ main() {
         fi
     done
 
+    # The Claude Code extension for VS Code (used later, when building full apps)
+    local ext_name="VS Code Claude"
+    local ext_padding
+    ext_padding=$(printf '%*s' $((16 - ${#ext_name})) '')
+    if command_exists code && code --list-extensions 2>/dev/null | grep -qi '^anthropic\.claude-code$'; then
+        echo -e "  \033[32m[OK]\033[0m $ext_name${ext_padding}extension installed"
+    else
+        echo -e "  \033[33m[--]\033[0m $ext_name${ext_padding}(extension not installed)"
+    fi
+
     echo ""
     echo "Next steps:"
-    echo "  1. Open a NEW terminal window (to load PATH changes)"
-    echo "  2. Open VS Code (type 'code' in terminal)"
-    echo "  3. Open a terminal in VS Code (Cmd + \`)"
-    echo "  4. Type 'claude' to start Claude Code"
-    echo "  5. You'll be prompted to authenticate on first run"
+    echo "  1. Open the Claude app and switch to the Code tab"
+    echo "  2. Choose a project folder and start working"
+    echo "  VS Code and its Claude Code extension are ready for later, when you build full apps."
     echo ""
     echo -e "\033[33mNote: You may need to open a new terminal for all PATH changes to take effect.\033[0m"
     echo ""

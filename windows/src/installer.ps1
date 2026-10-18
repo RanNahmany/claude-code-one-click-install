@@ -859,12 +859,28 @@ try {
         }
     }
 
+    # The Claude Code extension for VS Code (used later, when building full apps)
+    $extName = "VS Code Claude"
+    $extPadding = ' ' * (16 - $extName.Length)
+    $hasExt = $false
+    try {
+        if (Get-Command code -ErrorAction SilentlyContinue) {
+            $hasExt = [bool](& code --list-extensions 2>$null | Where-Object { $_ -ieq "anthropic.claude-code" })
+        }
+    }
+    catch { $hasExt = $false }
+    if ($hasExt) {
+        Write-Host "  [OK] $extName${extPadding}extension installed" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  [--] $extName${extPadding}extension not installed" -ForegroundColor Yellow
+    }
+
     Write-Host ""
     Write-ColoredOutput "Next steps:" "White"
-    Write-Host "  1. Open VS Code (type 'code' in terminal or find it in Start menu)" -ForegroundColor White
-    Write-Host "  2. Open a terminal in VS Code (Ctrl + backtick)" -ForegroundColor White
-    Write-Host "  3. Type 'claude' to start Claude Code" -ForegroundColor White
-    Write-Host "  4. You will be prompted to authenticate on first run" -ForegroundColor White
+    Write-Host "  1. Open the Claude app and switch to the Code tab" -ForegroundColor White
+    Write-Host "  2. Choose a project folder and start working" -ForegroundColor White
+    Write-Host "  VS Code and its Claude Code extension are ready for later, when you build full apps." -ForegroundColor White
     Write-Host ""
     Write-ColoredOutput "Note: You may need to restart your terminal for all PATH changes to take effect." "Yellow"
     Write-Host ""
