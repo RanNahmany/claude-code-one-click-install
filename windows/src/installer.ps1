@@ -798,7 +798,15 @@ try {
     Install-VSCode           # Step 1
     Install-Git              # Step 2
     Set-GitConfig            # Step 3
-    Install-NodeJS           # Step 4
+    # Node.js is not required by the native Claude Code installer, so a failure
+    # here (e.g. a moved download URL) must not abort the remaining steps.
+    try {
+        Install-NodeJS       # Step 4
+    }
+    catch {
+        Write-StepError "Node.js could not be installed: $($_.Exception.Message)"
+        Write-ColoredOutput "  Continuing without it - Claude Code does not need Node.js." "Yellow"
+    }
     Update-Npm               # Step 5
     Install-ClaudeCode       # Step 6
     Install-GitHubCLI        # Step 7
